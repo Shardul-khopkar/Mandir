@@ -1,7 +1,7 @@
 // Service Worker for Sales Tracker PWA
 // Smart caching with offline support
 
-const CACHE_NAME = 'sales-tracker-v2';
+const CACHE_NAME = 'sales-tracker-v3';
 const urlsToCache = [
   './',
   './index.html',
