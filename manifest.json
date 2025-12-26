@@ -1,0 +1,20 @@
+{
+  "name": "Pustak Stall Entry",
+  "short_name": "Sales Tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0e27",
+  "theme_color": "#8b5cf6",
+  "description": "Books & Photos Sales Tracker - Track daily sales for books and photos with monthly accounting",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "./icon.jpg",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

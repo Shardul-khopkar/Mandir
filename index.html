@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="description" content="Books & Photos Sales Tracker" />
+  <title>Pustak Stall Entry</title>
+  
+  <!-- Manifest for PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/jpeg" href="./icon.jpg" />
+  <link rel="apple-touch-icon" href="./icon.jpg" />
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-container">
+      <h2 class="auth-title">Welcome</h2>
+      <p class="auth-subtitle">Enter access code to continue</p>
+      
+      <form id="auth-form" class="auth-form">
+        <input
+          type="password"
+          id="password-input"
+          placeholder="Password"
+          class="auth-input"
+          autofocus
+        />
+        <p id="auth-error" class="auth-error"></p>
+        <button type="submit" class="auth-button">
+          Unlock Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App Screen -->
+  <div id="app-screen" class="screen hidden">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="header-logo">
+          <div class="logo-icon">P</div>
+          <h1 class="logo-text">Pustak Stall Entry</h1>
+        </div>
+        <div class="header-actions">
+          <button class="logout-button" aria-label="Logout">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Dashboard Section -->
+      <section id="dashboard-section" class="section">
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden"></div>
+
+        <!-- Date Selection -->
+        <div class="card">
+          <label class="card-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Select Date
+          </label>
+          <div class="date-controls">
+            <button type="button" id="date-prev-btn" class="date-btn" aria-label="Previous date">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <input
+              type="date"
+              id="date-input"
+              class="date-input"
+            />
+            <button type="button" id="date-next-btn" class="date-btn" aria-label="Next date">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category Selection -->
+        <div class="category-grid">
+          <button
+            class="category-button"
+            data-category="Books"
+            data-color="purple"
+          >
+            <span class="category-label">Books</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+          <button
+            class="category-button"
+            data-category="Photos"
+            data-color="orange"
+          >
+            <span class="category-label">Photos</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+        </div>
+
+        <!-- Product List -->
+        <div id="product-section" class="product-section hidden">
+          <h3 class="product-section-title" id="product-section-title"></h3>
+          <div id="product-grid" class="product-grid"></div>
+        </div>
+
+        <!-- Small non-primary action: Price Update (accessible from Dashboard only) -->
+        <div class="card small-action-card">
+          <button id="open-prices-page" class="small-action-button" type="button">Update Prices</button>
+        </div>
+      </section>
+
+      <!-- Prices / Price Update Page (Dashboard-only access) -->
+      <section id="prices-section" class="section hidden">
+        <div class="sheet-header">
+          <h2 class="sheet-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3h18v18H3z" stroke="currentColor"></path>
+            </svg>
+            Price Update
+          </h2>
+        </div>
+
+        <!-- Category Selection -->
+        <div class="category-grid">
+          <button class="category-button prices-category" data-category="books" data-color="purple">
+            <span class="category-label">Books Prices</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+          <button class="category-button prices-category" data-category="photos" data-color="orange">
+            <span class="category-label">Photos Prices</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+        </div>
+
+        <div class="card">
+          <div id="prices-table-container" class="prices-table-container">
+            <div class="sheet-empty">
+              <p>Select Books or Photos to manage prices</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Records Section -->
+      <section id="summary-section" class="section hidden">
+        
+        <div class="sheet-header">
+          <h2 class="sheet-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Records
+          </h2>
+          <button id="summary-refresh" class="refresh-button" aria-label="Refresh summary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Date Selection -->
+        <div class="card">
+          <label class="card-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Select Date
+          </label>
+          <div class="date-controls">
+            <button type="button" id="summary-date-prev-btn" class="date-btn" aria-label="Previous date">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <input type="date" id="summary-date-input" class="date-input" />
+            <button type="button" id="summary-date-next-btn" class="date-btn" aria-label="Next date">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="summary-container">
+          <div class="summary-header-row">
+            <div class="summary-col-item">Product</div>
+            <div class="summary-col-qty">Total</div>
+          </div>
+
+          <div id="summary-body" class="summary-body">
+            <div class="sheet-loading">
+              <div class="spinner"></div>
+              <span>Loading records...</span>
+            </div>
+          </div>
+
+          <div class="summary-footer">
+            <span id="summary-count">Products: 0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Monthly Records Section -->
+      <section id="monthly-section" class="section hidden">
+        <div class="sheet-header">
+          <h2 class="sheet-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Monthly
+          </h2>
+        </div>
+
+        <!-- Monthly Revenue Summary Card -->
+        <div id="monthly-summary-card" class="card monthly-summary-card hidden">
+          <div class="monthly-summary-content">
+            <h3 class="monthly-summary-title" id="monthly-summary-title"></h3>
+            <div class="monthly-summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">📚 Books</span>
+                <span class="summary-value" id="summary-books-revenue">-</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">📸 Photos</span>
+                <span class="summary-value" id="summary-photos-revenue">-</span>
+              </div>
+              <div class="summary-item highlight">
+                <span class="summary-label">📊 Total</span>
+                <span class="summary-value" id="summary-total-revenue">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Selection -->
+        <div class="category-grid">
+          <button
+            class="category-button monthly-category"
+            data-category="books"
+            data-color="purple"
+          >
+            <span class="category-label">Books</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+          <button
+            class="category-button monthly-category"
+            data-category="photos"
+            data-color="orange"
+          >
+            <span class="category-label">Photos</span>
+            <div class="category-indicator hidden"></div>
+          </button>
+        </div>
+
+        <!-- Month Selection -->
+        <div class="card">
+          <label class="card-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Select Month
+          </label>
+          <input
+            type="month"
+            id="monthly-month-input"
+            class="date-input"
+          />
+        </div>
+
+        <!-- Monthly Table -->
+        <div id="monthly-table-container" class="monthly-table-container">
+          <div class="sheet-empty">
+            <p>Select a category and month to view sales</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button
+        class="nav-button active"
+        data-section="dashboard"
+        aria-label="Entry"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span class="nav-label">Entry</span>
+      </button>
+      <button
+        class="nav-button"
+        data-section="summary"
+        aria-label="Records"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+          <line x1="8" y1="14" x2="8" y2="18"></line>
+          <line x1="12" y1="14" x2="12" y2="18"></line>
+          <line x1="16" y1="14" x2="16" y2="18"></line>
+        </svg>
+        <span class="nav-label">Records</span>
+      </button>
+      <button
+        class="nav-button"
+        data-section="monthly"
+        aria-label="Monthly"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span class="nav-label">Monthly</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Previous Stock Modal -->
+  <div id="prev-stock-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Edit Previous Stock</h3>
+      <p class="modal-text">Product: <span id="prev-modal-product" class="modal-highlight"></span></p>
+      <div class="modal-quantity">
+        <label for="prev-modal-input" class="modal-label">Previous Stock:</label>
+        <input type="number" id="prev-modal-input" class="modal-quantity-input" min="0" step="1" />
+      </div>
+      <div class="modal-quantity">
+        <label for="prev-modal-notes" class="modal-label">Notes (optional):</label>
+        <input type="text" id="prev-modal-notes" class="modal-quantity-input" />
+      </div>
+      <div class="modal-actions">
+        <button id="prev-modal-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="prev-modal-save" class="modal-button modal-button-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Variance Modal -->
+  <div id="variance-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Edit Variance</h3>
+      <p class="modal-text">Product: <span id="variance-modal-product" class="modal-highlight"></span></p>
+      <div class="modal-quantity">
+        <label for="variance-modal-input" class="modal-label">Variance:</label>
+        <input type="number" id="variance-modal-input" class="modal-quantity-input" step="0.01" />
+      </div>
+      <div class="modal-actions">
+        <button id="variance-modal-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="variance-modal-save" class="modal-button modal-button-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price Edit Modal -->
+  <div id="price-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Update Price</h3>
+      <p class="modal-text">Product: <span id="price-modal-product" class="modal-highlight"></span></p>
+      <div class="modal-quantity">
+        <label for="price-modal-input" class="modal-label">New Price:</label>
+        <input type="number" id="price-modal-input" class="modal-quantity-input" min="0" step="0.01" />
+      </div>
+      <div class="modal-actions">
+        <button id="price-modal-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="price-modal-save" class="modal-button modal-button-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Confirm Sale</h3>
+      <p class="modal-text">
+        Add to <span id="modal-category" class="modal-highlight"></span>:<br />
+        <span id="modal-product" class="modal-product"></span>
+      </p>
+      <div class="modal-quantity">
+        <label for="modal-quantity-input" class="modal-label">Quantity:</label>
+        <input type="number" id="modal-quantity-input" class="modal-quantity-input" value="1" min="1" />
+      </div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="modal-button modal-button-cancel">
+          Cancel
+        </button>
+        <button id="modal-confirm" class="modal-button modal-button-confirm">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Script -->
+  <script src="app.js"></script>
+</body>
+</html>

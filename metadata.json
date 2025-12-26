@@ -1,0 +1,5 @@
+{
+  "name": "SalesTracker",
+  "description": "A mobile-first, dark-themed sales tracking PWA for Books and Photos.",
+  "requestFramePermissions": []
+}
