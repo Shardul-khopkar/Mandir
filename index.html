@@ -235,6 +235,12 @@
           <div class="category-pill-slider"></div>
         </div>
 
+        <!-- Daily Revenue Summary -->
+        <div class="daily-revenue-card">
+          <span class="daily-revenue-label">Daily Revenue:</span>
+          <span class="daily-revenue-value" id="summary-daily-total-top">₹0</span>
+        </div>
+
         <div class="summary-container">
           <div class="summary-header-row">
             <div class="summary-col-item">Product</div>
@@ -351,9 +357,8 @@
       <section id="cashflow-section" class="section hidden">
         <div class="sheet-header">
           <h2 class="sheet-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="1" x2="12" y2="23"></line>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-currency-rupee" viewBox="0 0 16 16">
+              <path d="M4 3.06h2.726c1.22 0 2.12.575 2.325 1.724H4v1.051h5.051C8.855 7.001 8 7.558 6.788 7.558H4v1.317L8.437 14h2.11L6.095 8.884h.855c2.316-.018 3.465-1.476 3.688-3.049H12V4.784h-1.345c-.08-.778-.357-1.335-.793-1.732H12V2H4z"/>
             </svg>
             Cashflow
           </h2>
@@ -409,6 +414,14 @@
               <polyline points="8 12 16 12"></polyline>
             </svg>
             Add Cash
+          </button>
+          <button id="cashflow-cash-count" class="action-button action-button-add">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 8 12 16"></polyline>
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            Cash Count
           </button>
           <button id="cashflow-remove-transaction" class="action-button action-button-remove">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -670,6 +683,34 @@
       <div class="modal-actions">
         <button id="cashflow-withdraw-cancel" class="modal-button modal-button-cancel">Cancel</button>
         <button id="cashflow-withdraw-confirm" class="modal-button modal-button-confirm">Withdraw</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cash Count Modal -->
+  <div id="cashflow-cash-count-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Record Physical Cash Count</h3>
+      <div class="modal-quantity">
+        <label for="cash-count-date" class="modal-label">Date:</label>
+        <input type="date" id="cash-count-date" class="modal-quantity-input" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cash-count-notes" class="modal-label">Notes (₹):</label>
+        <input type="number" id="cash-count-notes" class="modal-quantity-input" min="0" step="0.01" placeholder="Amount in notes" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cash-count-coins" class="modal-label">Coins (₹):</label>
+        <input type="number" id="cash-count-coins" class="modal-quantity-input" min="0" step="0.01" placeholder="Amount in coins" />
+      </div>
+      <div class="modal-quantity">
+        <label class="modal-label">Total:</label>
+        <div class="cash-count-total">₹<span id="cash-count-total-value">0</span></div>
+      </div>
+      <div class="modal-actions">
+        <button id="cash-count-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="cash-count-confirm" class="modal-button modal-button-confirm">Save</button>
       </div>
     </div>
   </div>

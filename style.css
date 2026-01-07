@@ -586,6 +586,7 @@ body {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
+  padding: 0 0.5rem;
 }
 
 @media (max-width: 375px) {
@@ -729,7 +730,7 @@ body {
   z-index: 0;
   pointer-events: auto;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -737,14 +738,14 @@ body {
 .modal-content {
   z-index: 1;
   pointer-events: auto;
-  background: var(--bg-glass);
+  background: rgba(31, 41, 79, 0.85);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   width: 100%;
   max-width: 24rem;
   border-radius: 1.5rem;
   padding: 1.5rem;
-  border: 1px solid var(--border-glass);
+  border: 1px solid rgba(139, 92, 246, 0.4);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   animation: scaleUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   max-height: 90vh;
@@ -798,6 +799,17 @@ body {
   backdrop-filter: var(--blur-sm);
   border: 1px solid var(--border-glass);
   border-radius: 0.875rem;
+}
+
+.cash-count-total {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--purple-400);
+  padding: 0.75rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  border-radius: 0.75rem;
+  text-align: center;
 }
 
 .modal-label {
@@ -1328,6 +1340,37 @@ body {
 }
 
 /* Records (formerly Daily) */
+.daily-revenue-card {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(249, 115, 22, 0.1));
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border-radius: 1.25rem;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  padding: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.daily-revenue-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.daily-revenue-value {
+  font-weight: 700;
+  font-size: 1.5rem;
+  background: var(--gradient-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .summary-container {
   background: var(--bg-glass);
   backdrop-filter: var(--blur-sm);
@@ -2007,6 +2050,37 @@ body {
   border-left: 3px solid rgba(239, 68, 68, 0.5);
 }
 
+.cashflow-cash-count-row {
+  background: rgba(139, 92, 246, 0.08);
+  border-left: 3px solid rgba(139, 92, 246, 0.4);
+}
+
+.cashflow-cash-count-row:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-left: 3px solid rgba(139, 92, 246, 0.6);
+}
+
+.cashflow-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  margin: 1rem 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  border-top: 2px solid var(--border-glass);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cashflow-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
+
 .cashflow-row:hover {
   background: rgba(139, 92, 246, 0.1);
   border-left: 3px solid rgba(139, 92, 246, 0.5);
@@ -2077,6 +2151,90 @@ body {
 .cashflow-delete-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.cashflow-cell-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 80px;
+  padding: 0.25rem;
+}
+
+.cashflow-edit-btn,
+.cashflow-delete-cc-btn {
+  background: rgba(31, 41, 79, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s ease;
+  line-height: 1;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  font-weight: 600;
+}
+
+.cashflow-edit-btn {
+  color: var(--purple-400);
+}
+
+.cashflow-edit-btn:hover {
+  background: rgba(139, 92, 246, 0.25);
+  color: var(--purple-300);
+  transform: scale(1.08);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.cashflow-delete-cc-btn {
+  color: var(--red-500);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.cashflow-delete-cc-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: var(--red-400);
+  transform: scale(1.08);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.cashflow-delete-cc-btn:active {
+  transform: scale(0.95);
+}
+
+.cash-count-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.cash-count-item {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cash-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cash-count-total {
+  font-weight: 700;
+  color: var(--purple-400);
+  font-size: 1rem;
 }
 
 /* Modal Styles for Cashflow */

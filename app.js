@@ -930,7 +930,14 @@ function initRecords() {
     });
 
     summaryCount.textContent = `Products: ${rows.length}`;
-    summaryDailyTotal.textContent = `₹${Math.round(dailyTotal).toLocaleString('en-IN')}`;
+    const formattedTotal = `₹${Math.round(dailyTotal).toLocaleString('en-IN')}`;
+    summaryDailyTotal.textContent = formattedTotal;
+    
+    // Update the top revenue display as well
+    const topRevenueDisplay = document.getElementById('summary-daily-total-top');
+    if (topRevenueDisplay) {
+      topRevenueDisplay.textContent = formattedTotal;
+    }
   }
 
   /**
@@ -1076,7 +1083,7 @@ function initMonthly() {
   if (viewToggleBtn) {
     viewToggleBtn.addEventListener('click', () => {
       isExpandedView = !isExpandedView;
-      toggleLabel.textContent = isExpandedView ? 'Default' : 'Expanded';
+      toggleLabel.textContent = isExpandedView ? 'Default View' : 'Expanded View';
       loadMonthlyData();
     });
   }
@@ -1167,7 +1174,7 @@ function initMonthly() {
         .get();
       
       const monthData = {};
-      const products = new Set();
+      const productsWithSales = new Set();
       
       snapshot.forEach((doc) => {
         const data = doc.data();
@@ -1178,7 +1185,7 @@ function initMonthly() {
           const item = data.item;
           const quantity = data.quantity || 1;
           
-          products.add(item);
+          productsWithSales.add(item);
           
           if (!monthData[item]) {
             monthData[item] = {};
@@ -1190,7 +1197,17 @@ function initMonthly() {
         }
       });
       
-      return { monthData, products: sortProductsByList(Array.from(products), category) };
+      // Get all products from the category list and add those with no sales
+      const allProducts = category === 'books' ? BOOKS_LIST : PHOTOS_LIST;
+      const allProductsSet = new Set(allProducts.map(p => p.toLowerCase()));
+      
+      allProductsSet.forEach(product => {
+        if (!monthData[product]) {
+          monthData[product] = {};
+        }
+      });
+      
+      return { monthData, products: sortProductsByList(allProducts, category) };
     } catch (error) {
       console.error('Error fetching monthly data:', error);
       throw error;
@@ -2227,6 +2244,57 @@ function initCashflow() {
   }
 
   /**
+   * Save cash count (notes + coins)
+   */
+  async function saveCashCount(date, notes, coins) {
+    const total = Number(notes) + Number(coins);
+    try {
+      await db.collection('cash_counts').doc(date).set({
+        date: date,
+        notes: Number(notes),
+        coins: Number(coins),
+        total: total,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      
+      showToast(`Cash count saved: ₹${Math.round(total)}`, 'success');
+    } catch (error) {
+      console.error('Error saving cash count:', error);
+      showToast('Failed to save cash count', 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch cash counts for a month
+   */
+  async function fetchCashCountsForMonth(yearMonth) {
+    const [year, month] = yearMonth.split('-');
+    const monthStart = `${year}-${month}-01`;
+    const monthEnd = `${year}-${month}-31`;
+    
+    try {
+      const snapshot = await db.collection('cash_counts')
+        .where('date', '>=', monthStart)
+        .where('date', '<=', monthEnd)
+        .orderBy('date', 'desc')
+        .get();
+      
+      const counts = [];
+      snapshot.forEach(doc => {
+        counts.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      return counts;
+    } catch (error) {
+      console.error('Error fetching cash counts:', error);
+      return [];
+    }
+  }
+
+  /**
    * Load and display cashflow for selected month
    */
   async function loadCashflow() {
@@ -2245,6 +2313,7 @@ function initCashflow() {
     
     try {
       const transactions = await fetchCashflowForMonth(selectedMonth);
+      const cashCounts = await fetchCashCountsForMonth(selectedMonth);
       const withBalances = calculateRunningBalance(transactions);
       
       // Get current balance (last transaction's running balance or 0)
@@ -2254,7 +2323,7 @@ function initCashflow() {
       
       balanceDisplay.textContent = `₹${Math.round(currentBalance).toLocaleString('en-IN')}`;
       
-      renderCashflowRows(withBalances);
+      renderCashflowRows(withBalances, cashCounts);
     } catch (error) {
       console.error('Failed to load cashflow', error);
       cashflowBody.innerHTML = `
@@ -2273,7 +2342,7 @@ function initCashflow() {
   /**
    * Render cashflow transactions
    */
-  function renderCashflowRows(transactions) {
+  function renderCashflowRows(transactions, cashCounts = []) {
     const role = getUserRole();
     
     if (!transactions || transactions.length === 0) {
@@ -2293,7 +2362,7 @@ function initCashflow() {
       
       const typeLabel = {
         'revenue': '📈 Revenue',
-        'cash': '💵 Cash',
+        'cash': '� Cash',
         'overflow': '↗️ Overflow',
         'withdrawal': '🏦 Withdrawal'
       }[t.type] || t.type;
@@ -2326,6 +2395,64 @@ function initCashflow() {
       
       cashflowBody.appendChild(row);
     });
+
+    // Add Cash Count records
+    if (cashCounts && cashCounts.length > 0) {
+      // Add a divider
+      const divider = document.createElement('div');
+      divider.className = 'cashflow-divider';
+      divider.innerHTML = '<span>📋 Physical Cash Counts</span>';
+      cashflowBody.appendChild(divider);
+
+      // Render cash counts
+      cashCounts.forEach(cc => {
+        const row = document.createElement('div');
+        row.className = 'cashflow-row cashflow-cash-count-row';
+        row.setAttribute('data-type', 'cash-count');
+        
+        const date = new Date(cc.date);
+        const dateStr = date.toLocaleDateString('en-IN');
+        
+        row.innerHTML = `
+          <div class="cashflow-cell cashflow-col-date">${dateStr}</div>
+          <div class="cashflow-cell cashflow-col-type">💰 Cash Count</div>
+          <div class="cashflow-cell cashflow-col-amount">
+            <div class="cash-count-breakdown">
+              <span class="cash-count-item"><span class="cash-label">Notes:</span> ₹${Math.round(cc.notes).toLocaleString('en-IN')}</span>
+              <span class="cash-count-item"><span class="cash-label">Coins:</span> ₹${Math.round(cc.coins).toLocaleString('en-IN')}</span>
+            </div>
+            <div class="cash-count-total">₹${Math.round(cc.total).toLocaleString('en-IN')}</div>
+          </div>
+          <div class="cashflow-cell cashflow-col-balance">-</div>
+          <div class="cashflow-cell cashflow-col-note">Physical count</div>
+          ${role === 'admin' ? `<div class="cashflow-cell-actions"><button class="cashflow-edit-btn" aria-label="Edit cash count">✎</button><button class="cashflow-delete-cc-btn" aria-label="Delete cash count">×</button></div>` : ''}
+        `;
+        
+        if (role === 'admin') {
+          const editBtn = row.querySelector('.cashflow-edit-btn');
+          const deleteBtn = row.querySelector('.cashflow-delete-cc-btn');
+          
+          editBtn.addEventListener('click', async () => {
+            showCashCountModal(cc.date);
+          });
+          
+          deleteBtn.addEventListener('click', async () => {
+            const confirmed = window.confirm(`Delete cash count for ${dateStr}?`);
+            if (!confirmed) return;
+            try {
+              await db.collection('cash_counts').doc(cc.date).delete();
+              showToast('Cash count deleted', 'success');
+              await loadCashflow();
+            } catch (error) {
+              console.error('Delete failed', error);
+              showToast('Failed to delete', 'error');
+            }
+          });
+        }
+        
+        cashflowBody.appendChild(row);
+      });
+    }
   }
 
   /**
@@ -2481,6 +2608,105 @@ function initCashflow() {
     }
   }
 
+  /**
+   * Show Cash Count Modal
+   * @param {string} editDate - Optional date to edit existing cash count
+   */
+  function showCashCountModal(editDate = null) {
+    const modal = document.getElementById('cashflow-cash-count-modal');
+    const dateInput = document.getElementById('cash-count-date');
+    const notesInput = document.getElementById('cash-count-notes');
+    const coinsInput = document.getElementById('cash-count-coins');
+    const totalDisplay = document.getElementById('cash-count-total-value');
+    const cancelBtn = document.getElementById('cash-count-cancel');
+    const confirmBtn = document.getElementById('cash-count-confirm');
+    
+    // Set default or edit date
+    const dateToUse = editDate || getLocalDate();
+    dateInput.value = dateToUse;
+    dateInput.disabled = editDate ? true : false; // Disable date editing when editing existing record
+    notesInput.value = '';
+    coinsInput.value = '';
+    totalDisplay.textContent = '0';
+    
+    // Load existing data if available
+    db.collection('cash_counts').doc(dateToUse).get().then(doc => {
+      if (doc.exists) {
+        const data = doc.data();
+        notesInput.value = data.notes || '';
+        coinsInput.value = data.coins || '';
+        updateCashCountTotal();
+      }
+    });
+    
+    modal.classList.remove('hidden');
+    setTimeout(() => notesInput.focus(), 100);
+    
+    // Update total as user types
+    const updateCashCountTotal = () => {
+      const notes = Number(notesInput.value) || 0;
+      const coins = Number(coinsInput.value) || 0;
+      totalDisplay.textContent = Math.round(notes + coins).toLocaleString('en-IN');
+    };
+    
+    notesInput.addEventListener('input', updateCashCountTotal);
+    coinsInput.addEventListener('input', updateCashCountTotal);
+    
+    const handleCancel = () => {
+      modal.classList.add('hidden');
+      dateInput.disabled = false;
+    };
+    
+    const handleConfirm = async () => {
+      const date = dateInput.value;
+      const notes = notesInput.value;
+      const coins = coinsInput.value;
+      
+      if (!date || notes === '' || coins === '') {
+        showToast('Please fill in all fields', 'error');
+        return;
+      }
+      
+      const notesNum = Number(notes);
+      const coinsNum = Number(coins);
+      
+      if (isNaN(notesNum) || isNaN(coinsNum) || notesNum < 0 || coinsNum < 0) {
+        showToast('Please enter valid amounts', 'error');
+        return;
+      }
+      
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Saving...';
+      
+      try {
+        await saveCashCount(date, notesNum, coinsNum);
+        modal.classList.add('hidden');
+        dateInput.disabled = false;
+        await loadCashflow();
+      } catch (error) {
+        console.error('Cash count error:', error);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Save';
+      }
+    };
+    
+    // Replace listeners
+    const newCancel = cancelBtn.cloneNode(true);
+    const newConfirm = confirmBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+    newCancel.addEventListener('click', handleCancel);
+    newConfirm.addEventListener('click', handleConfirm);
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-backdrop')) {
+        handleCancel();
+      }
+    });
+  }
+
   // Event listeners
   monthInput.addEventListener('change', (e) => {
     selectedMonth = e.target.value;
@@ -2499,6 +2725,12 @@ function initCashflow() {
   
   if (addRevenueBtn) {
     addRevenueBtn.addEventListener('click', handleAddRevenue);
+  }
+
+  // Cash count button
+  const cashCountBtn = document.getElementById('cashflow-cash-count');
+  if (cashCountBtn) {
+    cashCountBtn.addEventListener('click', showCashCountModal);
   }
 
   cashflowState.loadCashflow = loadCashflow;
