@@ -1,4 +1,49 @@
 // ============================================================================
+// Performance Optimization Utilities
+// ============================================================================
+
+/**
+ * Debounce function to prevent excessive function calls
+ */
+function debounce(func, delay = 300) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(this, args), delay);
+  };
+}
+
+/**
+ * Throttle function to limit function calls
+ */
+function throttle(func, limit = 1000) {
+  let inThrottle;
+  return function(...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
+/**
+ * Memoize function results for repeated calls
+ */
+function memoize(func) {
+  const cache = {};
+  return function(...args) {
+    const key = JSON.stringify(args);
+    if (key in cache) {
+      return cache[key];
+    }
+    const result = func.apply(this, args);
+    cache[key] = result;
+    return result;
+  };
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -6,7 +51,6 @@ const VIEWER_PASSWORD = 'Gopal@23';
 const ADMIN_PASSWORD = 'Shardul@1';
 const STORAGE_KEY_AUTH = 'salesTracker_auth';
 const STORAGE_KEY_ROLE = 'salesTracker_role';
-
 
 const CATEGORIES = {
   BOOKS: 'Books',
@@ -133,15 +177,48 @@ function showScreen(screenId) {
  */
 function showSection(sectionId) {
   console.log("NAVIGATION SWITCH", sectionId);
-  // Hide all sections
-  document.querySelectorAll('.section').forEach(sec => sec.classList.add('hidden'));
+  
+  // Add fade + slide animation to current section
+  const currentSection = document.querySelector('.section:not(.hidden)');
+  if (currentSection) {
+    currentSection.style.animation = 'none';
+    currentSection.offsetHeight; // Trigger reflow
+    currentSection.style.animation = 'oxygenPageOut 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+    
+    setTimeout(() => {
+      // Hide all sections
+      document.querySelectorAll('.section').forEach(sec => sec.classList.add('hidden'));
+      
+      // Show target section if exists
+      const targetEl = document.getElementById(sectionId);
+      if (targetEl) {
+        targetEl.classList.remove('hidden');
+        targetEl.style.animation = 'oxygenPageIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+      }
+      
+      // Smooth scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 180);
+  } else {
+    // Hide all sections
+    document.querySelectorAll('.section').forEach(sec => sec.classList.add('hidden'));
+    
+    // Show target section if exists
+    const targetEl = document.getElementById(sectionId);
+    if (targetEl) {
+      targetEl.classList.remove('hidden');
+      targetEl.style.animation = 'oxygenPageIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+    }
+    
+    // Smooth scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
-  // Show target section if exists
-  const targetEl = document.getElementById(sectionId);
-  if (targetEl) targetEl.classList.remove('hidden');
-
-  // Update nav buttons (if any match)
-  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  // Update nav buttons with smooth transitions
+  document.querySelectorAll('.nav-button').forEach(btn => {
+    btn.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    btn.classList.remove('active');
+  });
   const sectionName = sectionId.replace('-section', '');
   const targetButton = document.querySelector(`[data-section="${sectionName}"]`);
   if (targetButton) targetButton.classList.add('active');
@@ -149,6 +226,7 @@ function showSection(sectionId) {
   // Trigger section-specific loaders
   if (sectionName === 'summary' && window.loadRecords) window.loadRecords();
   if (sectionName === 'monthly' && window.loadMonthlyData) window.loadMonthlyData();
+  if (sectionName === 'cashflow' && window.loadCashflow) window.loadCashflow();
   if (sectionName === 'prices' && window.loadPrices) window.loadPrices();
 }
 
@@ -322,6 +400,32 @@ function handleLogout() {
 }
 
 // ============================================================================
+// Helper: Build Latest Price Map
+// ============================================================================
+
+/**
+ * Extract latest price for each product from price documents
+ * Handles timestamp conversion and selects most recent price
+ * 
+ * @param {Array} priceDocuments - Array of Firestore snapshot docs from price collection
+ * @returns {Object} Map of product name -> { price, time }
+ */
+function buildLatestPriceMap(priceDocuments) {
+  const map = {};
+  priceDocuments.forEach(doc => {
+    const data = doc.data();
+    if (!data || !data.product) return;
+    const ts = data.updatedAt && data.updatedAt.toMillis 
+      ? data.updatedAt.toMillis() 
+      : (data.updatedAt ? new Date(data.updatedAt).getTime() : 0);
+    if (!map[data.product] || ts > map[data.product].time) {
+      map[data.product] = { price: data.price, time: ts };
+    }
+  });
+  return map;
+}
+
+// ============================================================================
 // Firebase Operations
 // ============================================================================
 
@@ -329,21 +433,26 @@ function handleLogout() {
  * Record a sale in Firestore
  * Uses single sales/ collection with date+category+item as unique identifier
  */
-async function recordSale(category, productName, date, quantity = 1) {
+async function recordSale(category, productName, date, quantity = 1, hookType = null) {
   const categoryLower = category.toLowerCase();
   const qty = parseInt(quantity) || 1;
   
-  console.log(`Recording sale: ${category} - ${productName} (${date})`);
+  console.log(`Recording sale: ${category} - ${productName} (${date})${hookType ? ` - Hook: ${hookType}` : ''}`);
   
   try {
     // Query for existing document with same date, category, and item
     const salesRef = db.collection('sales');
-    const query = salesRef
+    let query = salesRef
       .where('date', '==', date)
       .where('category', '==', categoryLower)
-      .where('item', '==', productName)
-      .limit(1);
+      .where('item', '==', productName);
     
+    // If hookType is provided, include it in the query
+    if (hookType) {
+      query = query.where('hookType', '==', hookType);
+    }
+    
+    query = query.limit(1);
     const querySnapshot = await query.get();
     
     let saleData;
@@ -362,12 +471,16 @@ async function recordSale(category, productName, date, quantity = 1) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       
+      if (hookType) {
+        await doc.ref.update({ hookType: hookType });
+      }
       
       saleData = {
         date: date,
         category: categoryLower,
         item: productName,
         quantity: qty,
+        ...(hookType && { hookType: hookType }),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       
@@ -381,6 +494,7 @@ async function recordSale(category, productName, date, quantity = 1) {
         category: categoryLower,
         item: productName,
         quantity: qty,
+        ...(hookType && { hookType: hookType }),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       
@@ -405,7 +519,7 @@ async function recordSale(category, productName, date, quantity = 1) {
  */
 function initDashboard() {
   const dateInput = document.getElementById('date-input');
-  const categoryButtons = document.querySelectorAll('.category-button');
+  const categoryButtons = document.querySelectorAll('.category-pill-button');
   const productSection = document.getElementById('product-section');
   const productGrid = document.getElementById('product-grid');
   const productSectionTitle = document.getElementById('product-section-title');
@@ -456,11 +570,15 @@ function initDashboard() {
       // Toggle active state
       categoryButtons.forEach(btn => {
         btn.classList.remove('active');
-        btn.querySelector('.category-indicator').classList.add('hidden');
       });
       
       button.classList.add('active');
-      button.querySelector('.category-indicator').classList.remove('hidden');
+      
+      // Update pill slider animation
+      const container = button.closest('.category-pill-container');
+      if (container) {
+        updatePillSlider(container);
+      }
       
       selectedCategory = category;
       
@@ -508,20 +626,49 @@ function initDashboard() {
     const modalCancel = document.getElementById('modal-cancel');
     const modalConfirm = document.getElementById('modal-confirm');
     const modalQuantityInput = document.getElementById('modal-quantity-input');
+    const locketHookContainer = document.getElementById('modal-locket-hook-container');
+    const hookWithBtn = document.getElementById('modal-hook-with');
+    const hookWithoutBtn = document.getElementById('modal-hook-without');
+    const hookTypeInput = document.getElementById('modal-hook-type');
     
     // Reset modal state
     modalConfirm.disabled = false;
     modalConfirm.textContent = 'Confirm';
     modalQuantityInput.value = 1;
+    hookTypeInput.value = 'hook';
     
     modalCategory.textContent = category;
     modalProduct.textContent = productName;
+    
+    // Show/hide hook selector based on product
+    const isLocket = productName.toLowerCase() === 'locket';
+    if (isLocket) {
+      locketHookContainer.classList.remove('hidden');
+      hookWithBtn.classList.add('active');
+      hookWithoutBtn.classList.remove('active');
+    } else {
+      locketHookContainer.classList.add('hidden');
+    }
+    
     modal.classList.remove('hidden');
     
     // Focus on quantity input
     setTimeout(() => modalQuantityInput.focus(), 100);
     
     let isProcessing = false;
+    
+    // Handle hook button clicks
+    const handleHookWith = () => {
+      hookTypeInput.value = 'hook';
+      hookWithBtn.classList.add('active');
+      hookWithoutBtn.classList.remove('active');
+    };
+    
+    const handleHookWithout = () => {
+      hookTypeInput.value = 'no-hook';
+      hookWithBtn.classList.remove('active');
+      hookWithoutBtn.classList.add('active');
+    };
     
     // Handle cancel - always works, even during processing
     const handleCancel = () => {
@@ -535,13 +682,14 @@ function initDashboard() {
       if (!selectedCategory || !confirmProduct || isProcessing) return;
       
       const quantity = parseInt(modalQuantityInput.value) || 1;
+      const hookType = isLocket ? hookTypeInput.value : null;
       
       isProcessing = true;
       modalConfirm.disabled = true;
       modalConfirm.textContent = 'Processing...';
       
       try {
-        await recordSale(selectedCategory, confirmProduct, selectedDate, quantity);
+        await recordSale(selectedCategory, confirmProduct, selectedDate, quantity, hookType);
         showToast(`Sold: ${confirmProduct} x${quantity}`, 'success');
         if (window.loadRecords) {
           window.loadRecords();
@@ -569,12 +717,19 @@ function initDashboard() {
     // Remove any existing listeners by cloning (clean slate)
     const newCancel = modalCancel.cloneNode(true);
     const newConfirm = modalConfirm.cloneNode(true);
+    const newHookWith = hookWithBtn.cloneNode(true);
+    const newHookWithout = hookWithoutBtn.cloneNode(true);
+    
     modalCancel.parentNode.replaceChild(newCancel, modalCancel);
     modalConfirm.parentNode.replaceChild(newConfirm, modalConfirm);
+    hookWithBtn.parentNode.replaceChild(newHookWith, hookWithBtn);
+    hookWithoutBtn.parentNode.replaceChild(newHookWithout, hookWithoutBtn);
     
     // Add fresh event listeners
     newCancel.addEventListener('click', handleCancel);
     newConfirm.addEventListener('click', handleConfirm);
+    newHookWith.addEventListener('click', handleHookWith);
+    newHookWithout.addEventListener('click', handleHookWithout);
     modal.addEventListener('click', handleBackdrop);
   }
 }
@@ -589,22 +744,35 @@ let recordsState = {
 };
 
 /**
- * Fetch records for a specific date (one doc per product/category/date)
+ * Fetch records for a specific date (one doc per product/category/date/hookType)
  */
-async function fetchRecordsByDate(date) {
+async function fetchRecordsByDate(date, category = null) {
   const rows = [];
   try {
-    const snapshot = await db
-      .collection('sales')
-      .where('date', '==', date)
-      .get();
+    let query = db.collection('sales').where('date', '==', date);
+    
+    // Filter by category if provided
+    if (category) {
+      query = query.where('category', '==', category.toLowerCase());
+    }
+    
+    const snapshot = await query.get();
 
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (!data?.item || !data?.quantity) return;
+      
+      let displayName = String(data.item);
+      if (data.hookType) {
+        const hookLabel = data.hookType === 'hook' ? 'Hook' : 'No Hook';
+        displayName = `${data.item} (${hookLabel})`;
+      }
+      
       rows.push({
         id: doc.id,
-        productName: String(data.item),
+        productName: displayName,
+        item: String(data.item),
+        category: data.category,
         total: Number(data.quantity || 0)
       });
     });
@@ -627,10 +795,42 @@ function initRecords() {
   const dateInput = document.getElementById('summary-date-input');
   const summaryBody = document.getElementById('summary-body');
   const summaryCount = document.getElementById('summary-count');
+  const summaryDailyTotal = document.getElementById('summary-daily-total');
   const refreshButton = document.getElementById('summary-refresh');
+  const recordsCategoryButtons = document.querySelectorAll('#summary-section .category-pill-button');
 
   let selectedDate = getLocalDate();
+  let selectedCategory = 'books'; // Default to books
   dateInput.value = selectedDate;
+
+  // Set default category to Books
+  const defaultBooksBtn = document.querySelector('#summary-section [data-category="books"]');
+  if (defaultBooksBtn) {
+    defaultBooksBtn.classList.add('active');
+    const container = defaultBooksBtn.closest('.category-pill-container');
+    if (container) {
+      updatePillSlider(container);
+    }
+  }
+
+  // Handle category selection
+  recordsCategoryButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      recordsCategoryButtons.forEach(btn => {
+        btn.classList.remove('active');
+      });
+      button.classList.add('active');
+      
+      // Update pill slider animation
+      const container = button.closest('.category-pill-container');
+      if (container) {
+        updatePillSlider(container);
+      }
+      
+      selectedCategory = button.getAttribute('data-category').toLowerCase();
+      loadRecords();
+    });
+  });
 
   async function loadRecords() {
     if (recordsState.isLoading) return;
@@ -647,8 +847,12 @@ function initRecords() {
     `;
 
     try {
-      const rows = await fetchRecordsByDate(selectedDate);
-      renderRows(rows);
+      const rows = await fetchRecordsByDate(selectedDate, selectedCategory);
+      
+      // Fetch price map for the category
+      const pricesMap = await fetchPricesMapForRecords(selectedCategory);
+      
+      renderRows(rows, pricesMap);
     } catch (error) {
       console.error('Failed to load records', error);
       const errorMessage = error?.message || 'Failed to load records.';
@@ -659,6 +863,7 @@ function initRecords() {
         </div>
       `;
       summaryCount.textContent = 'Products: 0';
+      summaryDailyTotal.textContent = '₹0';
     } finally {
       recordsState.isLoading = false;
       refreshButton.classList.remove('loading');
@@ -666,23 +871,50 @@ function initRecords() {
     }
   }
 
-  function renderRows(rows) {
+  /**
+   * Fetch latest price map for a category
+   */
+  async function fetchPricesMapForRecords(category) {
+    const collectionName = category === 'books' ? 'product_prices_books' : 'product_prices_photos';
+    try {
+      const snapshot = await db.collection(collectionName).get();
+      const map = buildLatestPriceMap(snapshot.docs);
+      return map;
+    } catch (err) {
+      console.error('Error fetching prices:', err);
+      return {};
+    }
+  }
+
+  function renderRows(rows, pricesMap) {
     const role = getUserRole();
     summaryBody.innerHTML = '';
 
     if (!rows || rows.length === 0) {
       summaryBody.innerHTML = '<div class="sheet-empty">No sales for this date.</div>';
       summaryCount.textContent = 'Products: 0';
+      summaryDailyTotal.textContent = '₹0';
       return;
     }
 
-    rows.forEach(({ id, productName, total }) => {
+    let dailyTotal = 0;
+
+    rows.forEach(({ id, productName, item, total }) => {
+      const priceInfo = pricesMap && pricesMap[item];
+      const price = priceInfo && priceInfo.price !== undefined ? Number(priceInfo.price) : null;
+      const revenue = price !== null ? price * total : 0;
+      
+      dailyTotal += revenue;
+      
       const row = document.createElement('div');
       row.className = 'summary-row';
       row.innerHTML = `
         <div class="summary-cell-item" title="${productName}">${productName}</div>
         <div class="summary-cell-qty">
           <span class="sheet-qty-badge">${total}</span>
+        </div>
+        <div class="summary-cell-revenue">
+          ${price !== null ? `₹${Math.round(revenue).toLocaleString('en-IN')}` : '-'}
           ${role === 'admin' ? '<button class="row-delete-btn" aria-label="Delete record">×</button>' : ''}
         </div>
       `;
@@ -690,26 +922,7 @@ function initRecords() {
       if (role === 'admin') {
         const deleteBtn = row.querySelector('.row-delete-btn');
         deleteBtn.addEventListener('click', async () => {
-          const confirmed = window.confirm(`Delete 1 unit of "${productName}" on ${selectedDate}?`);
-          if (!confirmed) return;
-          try {
-            // Delete only one unit, not entire record
-            const recordRef = db.collection('sales').doc(id);
-            const recordDoc = await recordRef.get();
-            if (recordDoc.exists) {
-              const currentQty = recordDoc.data().quantity || 1;
-              if (currentQty > 1) {
-                await recordRef.update({ quantity: currentQty - 1 });
-              } else {
-                await recordRef.delete();
-              }
-            }
-            await loadRecords();
-            showToast('1 unit deleted', 'success');
-          } catch (error) {
-            console.error('Delete failed', error);
-            showToast('Delete failed. Check console.', 'error');
-          }
+          showDeleteRecordModal(id, productName, total);
         });
       }
 
@@ -717,7 +930,76 @@ function initRecords() {
     });
 
     summaryCount.textContent = `Products: ${rows.length}`;
+    summaryDailyTotal.textContent = `₹${Math.round(dailyTotal).toLocaleString('en-IN')}`;
   }
+
+  /**
+   * Show delete record modal
+   */
+  function showDeleteRecordModal(docId, productName, currentQty) {
+    const modal = document.getElementById('delete-record-modal');
+    const productLabel = document.getElementById('delete-modal-product');
+    const qtyLabel = document.getElementById('delete-modal-qty');
+    const reduceBtn = document.getElementById('delete-modal-reduce');
+    const deleteBtn = document.getElementById('delete-modal-delete');
+    const cancelBtn = document.getElementById('delete-modal-cancel');
+
+    productLabel.textContent = productName;
+    qtyLabel.textContent = currentQty;
+
+    const handleReduce = async () => {
+      try {
+        const recordRef = db.collection('sales').doc(docId);
+        const recordDoc = await recordRef.get();
+        if (recordDoc.exists) {
+          const qty = recordDoc.data().quantity || 1;
+          if (qty > 1) {
+            await recordRef.update({ quantity: qty - 1 });
+          } else {
+            await recordRef.delete();
+          }
+        }
+        await loadRecords();
+        showToast('Quantity reduced', 'success');
+        modal.classList.add('hidden');
+      } catch (error) {
+        console.error('Reduce failed', error);
+        showToast('Failed to reduce quantity', 'error');
+      }
+    };
+
+    const handleDelete = async () => {
+      try {
+        await db.collection('sales').doc(docId).delete();
+        await loadRecords();
+        showToast('Entry deleted', 'success');
+        modal.classList.add('hidden');
+      } catch (error) {
+        console.error('Delete failed', error);
+        showToast('Failed to delete entry', 'error');
+      }
+    };
+
+    const handleCancel = () => {
+      modal.classList.add('hidden');
+    };
+
+    // Replace listeners
+    const newReduce = reduceBtn.cloneNode(true);
+    const newDelete = deleteBtn.cloneNode(true);
+    const newCancel = cancelBtn.cloneNode(true);
+    
+    reduceBtn.parentNode.replaceChild(newReduce, reduceBtn);
+    deleteBtn.parentNode.replaceChild(newDelete, deleteBtn);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+    newReduce.addEventListener('click', handleReduce);
+    newDelete.addEventListener('click', handleDelete);
+    newCancel.addEventListener('click', handleCancel);
+
+    modal.classList.remove('hidden');
+  }
+
 
   dateInput.addEventListener('change', (e) => {
     selectedDate = e.target.value;
@@ -767,21 +1049,36 @@ function initRecords() {
  */
 function initMonthly() {
   const monthInput = document.getElementById('monthly-month-input');
-  const categoryButtons = document.querySelectorAll('.monthly-category');
+  const categoryButtons = document.querySelectorAll('#monthly-section .category-pill-button');
   const tableContainer = document.getElementById('monthly-table-container');
+  const viewToggleBtn = document.getElementById('monthly-view-toggle');
+  const toggleLabel = viewToggleBtn?.querySelector('.toggle-label');
   
   let selectedMonth = getLocalDate().substring(0, 7); // YYYY-MM
   let selectedCategory = 'books'; // Default to books
   let monthData = {}; // Store current month's sales data for use in modals
+  let isExpandedView = false; // Default to default view (product, prev, sales, remaining, revenue, variance)
   
   // Set default month
   monthInput.value = selectedMonth;
   
   // Set default category to Books
-  const defaultBooksBtn = document.querySelector('[data-category="books"].monthly-category');
+  const defaultBooksBtn = document.querySelector('#monthly-section [data-category="books"]');
   if (defaultBooksBtn) {
     defaultBooksBtn.classList.add('active');
-    defaultBooksBtn.querySelector('.category-indicator').classList.remove('hidden');
+    const container = defaultBooksBtn.closest('.category-pill-container');
+    if (container) {
+      updatePillSlider(container);
+    }
+  }
+  
+  // Handle view toggle
+  if (viewToggleBtn) {
+    viewToggleBtn.addEventListener('click', () => {
+      isExpandedView = !isExpandedView;
+      toggleLabel.textContent = isExpandedView ? 'Default' : 'Expanded';
+      loadMonthlyData();
+    });
   }
   
   // Handle month change
@@ -800,13 +1097,11 @@ function initMonthly() {
       });
       button.classList.add('active');
       
-      // Update indicator
-      button.querySelector('.category-indicator').classList.remove('hidden');
-      categoryButtons.forEach(btn => {
-        if (btn !== button) {
-          btn.querySelector('.category-indicator').classList.add('hidden');
-        }
-      });
+      // Update pill slider animation
+      const container = button.closest('.category-pill-container');
+      if (container) {
+        updatePillSlider(container);
+      }
       
       selectedCategory = button.getAttribute('data-category').toLowerCase();
       loadMonthlyData();
@@ -850,7 +1145,14 @@ function initMonthly() {
   }
   
   /**
-   * Fetch monthly sales data from Firestore
+   * Fetch monthly data for category
+   * 
+   * @param {string} category - "books" or "photos"
+   * @param {string} yearMonth - "YYYY-MM" format (e.g., "2026-01")
+   * @returns {Object} { monthData (product -> date -> qty), products (sorted array) }
+   * 
+   * NOTE: Date filtering uses string comparison with "YYYY-MM-DD" format.
+   * This works correctly for ISO 8601 - all dates in system must maintain this format.
    */
   async function fetchMonthlyData(category, yearMonth) {
     const categoryLower = category.toLowerCase();
@@ -897,6 +1199,9 @@ function initMonthly() {
   
   /**
    * Get all dates in the month
+   * 
+   * NOTE: Returns dates in "YYYY-MM-DD" format (ISO 8601).
+   * This format is required for string comparison with date filtering throughout the app.
    */
   function getDatesInMonth(yearMonth) {
     const [year, month] = yearMonth.split('-');
@@ -934,35 +1239,34 @@ function initMonthly() {
 
   /**
    * Helper: fetch price map (price effective by month end) for all products
+   * 
+   * NOTE: Date filtering uses timestamp comparison - selects prices effective by month end.
+   * Timestamp must be in milliseconds (Firestore .toMillis() format).
    */
   async function fetchPricesForMonth(category, yearMonth) {
     const collectionName = category === 'books' ? 'product_prices_books' : 'product_prices_photos';
-    const map = {};
     const [year, month] = yearMonth.split('-').map(s => Number(s));
     const monthEnd = new Date(year, month, 0, 23, 59, 59, 999).getTime();
     try {
       const snapshot = await db.collection(collectionName).get();
-      snapshot.forEach(doc => {
+      const docs = snapshot.docs.filter(doc => {
         const data = doc.data();
-        if (!data || !data.product) return;
-        const p = data.product;
+        if (!data || !data.product) return false;
         const ts = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : (data.updatedAt ? new Date(data.updatedAt).getTime() : 0);
-        if (ts <= monthEnd) {
-          if (!map[p] || ts > map[p].time) {
-            map[p] = { price: data.price, time: ts };
-          }
-        }
+        return ts <= monthEnd;
       });
+      const map = buildLatestPriceMap(docs);
+      return map;
     } catch (err) {
       console.error('Error fetching prices for month:', err);
+      return {};
     }
-    return map;
   }
 
   /**
    * Render monthly table with expanded/compact views, previous/remaining, variance and revenue
    */
-  async function renderMonthlyTable(monthData, products, dates, monthRecordsMap, pricesMap) {
+  async function renderMonthlyTable(monthData, products, dates, monthRecordsMap, pricesMap, isExpanded = false) {
     if (!products || products.length === 0) {
       tableContainer.innerHTML = `
         <div class="sheet-empty">
@@ -972,21 +1276,25 @@ function initMonthly() {
       return;
     }
 
-    // Build header
+    // Build header based on view mode
     let html = '<div class="monthly-table-wrapper"><table class="monthly-table"><thead><tr>';
-    html += '<th class="monthly-cell monthly-cell-product header-toggle" style="cursor: pointer;">Product</th>';
+    html += '<th class="monthly-cell monthly-cell-product">Product</th>';
 
-    dates.forEach(date => {
-      const day = new Date(date).getDate();
-      html += `<th class="monthly-cell monthly-cell-date">${day}</th>`;
-    });
-
-    // New order: Previous, Total Sales, Remaining, Revenue, Variance
-    html += '<th class="monthly-cell monthly-cell-prev">Previous</th>';
-    html += '<th class="monthly-cell monthly-cell-total">Total Sales</th>';
-    html += '<th class="monthly-cell monthly-cell-remaining">Remaining</th>';
-    html += '<th class="monthly-cell monthly-cell-revenue">Revenue</th>';
-    html += '<th class="monthly-cell monthly-cell-variance">Variance</th>';
+    if (isExpanded) {
+      // Expanded view: Product, Daily columns, Total Sales
+      dates.forEach(date => {
+        const day = new Date(date).getDate();
+        html += `<th class="monthly-cell monthly-cell-date">${day}</th>`;
+      });
+      html += '<th class="monthly-cell monthly-cell-total">Total Sales</th>';
+    } else {
+      // Default view: Product, Previous, Total Sales, Remaining, Revenue, Variance
+      html += '<th class="monthly-cell monthly-cell-prev">Previous</th>';
+      html += '<th class="monthly-cell monthly-cell-total">Total Sales</th>';
+      html += '<th class="monthly-cell monthly-cell-remaining">Remaining</th>';
+      html += '<th class="monthly-cell monthly-cell-revenue">Revenue</th>';
+      html += '<th class="monthly-cell monthly-cell-variance">Variance</th>';
+    }
     html += '</tr></thead><tbody>';
 
     // Rows
@@ -995,18 +1303,29 @@ function initMonthly() {
       html += `<td class="monthly-cell monthly-cell-product" title="${product}">${product}</td>`;
 
       let productTotal = 0;
-      dates.forEach(date => {
-        const qty = monthData[product] && monthData[product][date] ? monthData[product][date] : 0;
-        html += `<td class="monthly-cell monthly-cell-date-qty">${qty}</td>`;
-        productTotal += qty;
-      });
+      
+      if (isExpanded) {
+        // Expanded view: show daily columns
+        dates.forEach(date => {
+          const qty = monthData[product] && monthData[product][date] ? monthData[product][date] : 0;
+          html += `<td class="monthly-cell monthly-cell-date-qty">${qty}</td>`;
+          productTotal += qty;
+        });
+        html += `<td class="monthly-cell monthly-cell-total"><strong>${productTotal}</strong></td>`;
+      } else {
+        // Default view: show accounting columns
+        dates.forEach(date => {
+          const qty = monthData[product] && monthData[product][date] ? monthData[product][date] : 0;
+          productTotal += qty;
+        });
 
-      // placeholders for the accounting columns (filled after)
-      html += `<td class="monthly-cell monthly-cell-prev" data-product="${product}">-</td>`;
-      html += `<td class="monthly-cell monthly-cell-total"><strong>${productTotal}</strong></td>`;
-      html += `<td class="monthly-cell monthly-cell-remaining" data-product="${product}">-</td>`;
-      html += `<td class="monthly-cell monthly-cell-revenue" data-product="${product}">-</td>`;
-      html += `<td class="monthly-cell monthly-cell-variance" data-product="${product}"><span class="editable-cell" data-type="variance" style="cursor: pointer;">-</span></td>`;
+        // placeholders for the accounting columns (filled after)
+        html += `<td class="monthly-cell monthly-cell-prev" data-product="${product}">-</td>`;
+        html += `<td class="monthly-cell monthly-cell-total"><strong>${productTotal}</strong></td>`;
+        html += `<td class="monthly-cell monthly-cell-remaining" data-product="${product}">-</td>`;
+        html += `<td class="monthly-cell monthly-cell-revenue" data-product="${product}">-</td>`;
+        html += `<td class="monthly-cell monthly-cell-variance" data-product="${product}"><span class="editable-cell" data-type="variance" style="cursor: pointer;">-</span></td>`;
+      }
 
       html += '</tr>';
     });
@@ -1014,54 +1333,65 @@ function initMonthly() {
     html += '</tbody></table></div>';
     tableContainer.innerHTML = html;
 
-    // Toggle behavior bound to Product header
-    const productHeader = tableContainer.querySelector('.header-toggle');
-    if (productHeader) {
-      productHeader.addEventListener('click', () => {
-        // Toggle dates vs accounting view
-        tableContainer.querySelectorAll('.monthly-cell-date').forEach(cell => cell.classList.toggle('hidden'));
-        tableContainer.querySelectorAll('.monthly-cell-date-qty').forEach(cell => cell.classList.toggle('hidden'));
+    // Only populate accounting columns in default view
+    if (!isExpanded) {
+      products.forEach(product => {
+        const rowPrev = tableContainer.querySelector(`.monthly-cell-prev[data-product="${product}"]`);
+        const rowRemaining = tableContainer.querySelector(`.monthly-cell-remaining[data-product="${product}"]`);
+        const rowVariance = tableContainer.querySelector(`.monthly-cell-variance[data-product="${product}"]`);
+        const rowRevenue = tableContainer.querySelector(`.monthly-cell-revenue[data-product="${product}"]`);
+
+        const rec = monthRecordsMap && monthRecordsMap[product] ? monthRecordsMap[product] : {};
+        const prev = rec.previousStock !== undefined ? Number(rec.previousStock) : null;
+        const variance = rec.variance !== undefined ? rec.variance : null;
+        const total = Array.from(monthData[product] ? Object.values(monthData[product]) : []).reduce((s, v) => s + Number(v || 0), 0);
+        const remaining = prev !== null ? (prev - total) : null;
+
+        if (rowPrev) rowPrev.innerHTML = `<span class="editable-cell" data-product="${product}" style="cursor: pointer;">${prev !== null ? prev : '-'}</span>`;
+        if (rowRemaining) rowRemaining.innerHTML = remaining !== null ? `<span>${remaining}</span>` : '-';
+        
+        // Variance cell with color coding
+        if (rowVariance) {
+          let varianceClass = '';
+          let varianceLabel = '';
+          if (variance !== null) {
+            if (variance > 0) {
+              varianceClass = 'variance-positive';
+              varianceLabel = ' more';
+            } else if (variance < 0) {
+              varianceClass = 'variance-negative';
+              varianceLabel = ' less';
+            } else {
+              varianceClass = 'variance-neutral';
+            }
+            rowVariance.innerHTML = `<span class="editable-cell variance-cell ${varianceClass}" data-product="${product}" data-type="variance" style="cursor: pointer;">${variance}${varianceLabel}</span>`;
+          } else {
+            rowVariance.innerHTML = `<span class="editable-cell variance-cell variance-neutral" data-product="${product}" data-type="variance" style="cursor: pointer;">-</span>`;
+          }
+        }
+
+        // revenue = total sales * price (price fetched from pricesMap)
+        const priceInfo = pricesMap && pricesMap[product] ? pricesMap[product] : null;
+        const price = priceInfo && priceInfo.price !== undefined ? Number(priceInfo.price) : null;
+        const revenue = (price !== null) ? (price * total) : null;
+        if (rowRevenue) rowRevenue.innerHTML = revenue === null ? '-' : `<span class="editable-cell" data-product="${product}" data-type="revenue" style="cursor: pointer;">${Math.round(revenue)}</span>`;
+      });
+
+      // Attach handlers for clickable previous, variance, and revenue cells
+      tableContainer.querySelectorAll('.editable-cell').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          const product = e.target.getAttribute('data-product');
+          const type = e.target.getAttribute('data-type') || 'previous';
+          if (type === 'variance') {
+            showVarianceModal(selectedCategory, product);
+          } else if (type === 'revenue') {
+            showMonthlySummary(selectedCategory, selectedMonth, monthData, pricesMap);
+          } else {
+            showPrevStockModal(selectedCategory, product);
+          }
+        });
       });
     }
-
-    // Now populate accounting columns (fetch month records and prices for shown products)
-    products.forEach(product => {
-      const rowPrev = tableContainer.querySelector(`.monthly-cell-prev[data-product="${product}"]`);
-      const rowRemaining = tableContainer.querySelector(`.monthly-cell-remaining[data-product="${product}"]`);
-      const rowVariance = tableContainer.querySelector(`.monthly-cell-variance[data-product="${product}"]`);
-      const rowRevenue = tableContainer.querySelector(`.monthly-cell-revenue[data-product="${product}"]`);
-
-      const rec = monthRecordsMap && monthRecordsMap[product] ? monthRecordsMap[product] : {};
-      const prev = rec.previousStock !== undefined ? Number(rec.previousStock) : null;
-      const variance = rec.variance !== undefined ? rec.variance : null;
-      const total = Array.from(monthData[product] ? Object.values(monthData[product]) : []).reduce((s, v) => s + Number(v || 0), 0);
-      const remaining = prev !== null ? (prev - total) : null;
-
-      if (rowPrev) rowPrev.innerHTML = `<span class="editable-cell" data-product="${product}" style="cursor: pointer;">${prev !== null ? prev : '-'}</span>`;
-      if (rowRemaining) rowRemaining.innerHTML = remaining !== null ? `<span>${remaining}</span>` : '-';
-      if (rowVariance) rowVariance.innerHTML = `<span class="editable-cell" data-product="${product}" data-type="variance" style="cursor: pointer;">${variance !== null ? variance : '-'}</span>`;
-
-      // revenue = total sales * price (price fetched from pricesMap)
-      const priceInfo = pricesMap && pricesMap[product] ? pricesMap[product] : null;
-      const price = priceInfo && priceInfo.price !== undefined ? Number(priceInfo.price) : null;
-      const revenue = (price !== null) ? (price * total) : null;
-      if (rowRevenue) rowRevenue.innerHTML = revenue === null ? '-' : `<span class="editable-cell" data-product="${product}" data-type="revenue" style="cursor: pointer;">${Math.round(revenue)}</span>`;
-    });
-
-    // Attach handlers for clickable previous, variance, and revenue cells
-    tableContainer.querySelectorAll('.editable-cell').forEach(cell => {
-      cell.addEventListener('click', (e) => {
-        const product = e.target.getAttribute('data-product');
-        const type = e.target.getAttribute('data-type') || 'previous';
-        if (type === 'variance') {
-          showVarianceModal(selectedCategory, product);
-        } else if (type === 'revenue') {
-          showMonthlySummary(selectedCategory, selectedMonth, monthData, pricesMap);
-        } else {
-          showPrevStockModal(selectedCategory, product);
-        }
-      });
-    });
   }
 
   // Helper: get monthly record doc ref
@@ -1197,31 +1527,92 @@ function initMonthly() {
     const modal = document.getElementById('variance-modal');
     const productLabel = document.getElementById('variance-modal-product');
     const input = document.getElementById('variance-modal-input');
+    const lessBtn = document.getElementById('variance-less-btn');
+    const noneBtn = document.getElementById('variance-none-btn');
+    const moreBtn = document.getElementById('variance-more-btn');
     const cancel = document.getElementById('variance-modal-cancel');
     const save = document.getElementById('variance-modal-save');
 
+    let varianceType = 'none'; // 'less', 'none', 'more' - controls the color
+    
     productLabel.textContent = product;
-    // load current value
+    
+    // Load current value and set button state
     fetchMonthlyRecord(category, product, selectedMonth).then(rec => {
-      input.value = rec && rec.variance !== undefined ? rec.variance : '';
+      if (rec && rec.variance !== undefined && rec.variance !== null) {
+        const value = rec.variance;
+        input.value = Math.abs(value);
+        
+        if (value < 0) {
+          varianceType = 'less';
+        } else if (value > 0) {
+          varianceType = 'more';
+        } else {
+          varianceType = 'none';
+        }
+      } else {
+        input.value = '';
+        varianceType = 'none';
+      }
+      updateButtonStates();
     });
 
-    modal.classList.remove('hidden');
-    setTimeout(() => input.focus(), 100);
+    function updateButtonStates() {
+      lessBtn.classList.remove('active');
+      noneBtn.classList.remove('active');
+      moreBtn.classList.remove('active');
+      
+      if (varianceType === 'less') {
+        lessBtn.classList.add('active');
+      } else if (varianceType === 'more') {
+        moreBtn.classList.add('active');
+      } else {
+        noneBtn.classList.add('active');
+      }
+    }
+
+    // Button click handlers - only change type, not the number
+    const handleLessClick = () => {
+      varianceType = varianceType === 'less' ? 'none' : 'less';
+      updateButtonStates();
+    };
+
+    const handleNoneClick = () => {
+      varianceType = 'none';
+      updateButtonStates();
+    };
+
+    const handleMoreClick = () => {
+      varianceType = varianceType === 'more' ? 'none' : 'more';
+      updateButtonStates();
+    };
 
     const handleCancel = () => modal.classList.add('hidden');
 
     const handleSave = async () => {
-      const value = input.value === '' ? null : Number(input.value);
-      if (value !== null && isNaN(value)) {
-        showToast('Invalid number', 'error');
+      const numberValue = input.value === '' ? null : Number(input.value);
+      
+      if (numberValue !== null && (isNaN(numberValue) || numberValue < 0)) {
+        showToast('Please enter a valid positive number', 'error');
         return;
+      }
+
+      // Apply sign based on button selection
+      let finalValue = null;
+      if (numberValue !== null) {
+        if (varianceType === 'less') {
+          finalValue = -Math.abs(numberValue);
+        } else if (varianceType === 'more') {
+          finalValue = Math.abs(numberValue);
+        } else {
+          finalValue = null; // none = neutral
+        }
       }
 
       save.disabled = true;
       save.textContent = 'Saving...';
       try {
-        await updateMonthlyRecord(category, product, selectedMonth, { variance: value });
+        await updateMonthlyRecord(category, product, selectedMonth, { variance: finalValue });
         showToast('Variance saved', 'success');
         modal.classList.add('hidden');
         if (window.loadMonthlyData) await window.loadMonthlyData();
@@ -1234,12 +1625,28 @@ function initMonthly() {
     };
 
     // Replace listeners
+    const newInput = input.cloneNode(true);
+    const newLess = lessBtn.cloneNode(true);
+    const newNone = noneBtn.cloneNode(true);
+    const newMore = moreBtn.cloneNode(true);
     const newCancel = cancel.cloneNode(true);
     const newSave = save.cloneNode(true);
+    
+    input.parentNode.replaceChild(newInput, input);
+    lessBtn.parentNode.replaceChild(newLess, lessBtn);
+    noneBtn.parentNode.replaceChild(newNone, noneBtn);
+    moreBtn.parentNode.replaceChild(newMore, moreBtn);
     cancel.parentNode.replaceChild(newCancel, cancel);
     save.parentNode.replaceChild(newSave, save);
+    
+    newLess.addEventListener('click', handleLessClick);
+    newNone.addEventListener('click', handleNoneClick);
+    newMore.addEventListener('click', handleMoreClick);
     newCancel.addEventListener('click', handleCancel);
     newSave.addEventListener('click', handleSave);
+
+    setTimeout(() => newInput.focus(), 100);
+    modal.classList.remove('hidden');
   }
 
   function showMonthlySummary(category, month, monthData, pricesMap) {
@@ -1316,7 +1723,7 @@ function initMonthly() {
       const monthRecordsMap = await fetchMonthlyRecordsMap(selectedCategory, selectedMonth);
       const pricesMap = await fetchPricesForMonth(selectedCategory, selectedMonth);
 
-      await renderMonthlyTable(monthData, products, dates, monthRecordsMap, pricesMap);
+      await renderMonthlyTable(monthData, products, dates, monthRecordsMap, pricesMap, isExpandedView);
       
       // Auto-propagate remaining stocks to next month
       await autoPropagateRemainingStocks(selectedCategory, selectedMonth, monthData, monthRecordsMap);
@@ -1556,6 +1963,552 @@ function initPricePage() {
 }
 
 // ============================================================================
+// Cashflow Tracking
+// ============================================================================
+
+/**
+ * Initialize Cashflow page
+ */
+function initCashflow() {
+  const monthInput = document.getElementById('cashflow-month-input');
+  const balanceDisplay = document.getElementById('cashflow-balance');
+  const cashflowBody = document.getElementById('cashflow-body');
+  const refreshButton = document.getElementById('cashflow-refresh');
+  
+  // Modal elements
+  const addModal = document.getElementById('cashflow-add-modal');
+  const withdrawModal = document.getElementById('cashflow-withdraw-modal');
+  const addBtn = document.getElementById('cashflow-add-transaction');
+  const withdrawBtn = document.getElementById('cashflow-remove-transaction');
+  const addRevenueBtn = document.getElementById('cashflow-add-revenue');
+  
+  let selectedMonth = getLocalDate().substring(0, 7); // YYYY-MM
+  monthInput.value = selectedMonth;
+  
+  let cashflowState = {
+    isLoading: false,
+    loadCashflow: null
+  };
+
+  /**
+   * Fetch all cashflow transactions for a given month
+   * 
+   * @param {string} yearMonth - "YYYY-MM" format (e.g., "2026-01")
+   * @returns {Array} Array of transactions sorted by date
+   * 
+   * NOTE: Date filtering uses string comparison with "YYYY-MM-DD" format.
+   * This works correctly for ISO 8601 - all dates in system must maintain this format.
+   */
+  async function fetchCashflowForMonth(yearMonth) {
+    const [year, month] = yearMonth.split('-');
+    const monthStart = `${year}-${month}-01`;
+    const monthEnd = `${year}-${month}-31`;
+    
+    try {
+      const snapshot = await db.collection('cashflow').get();
+      const transactions = [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const date = data.date;
+        
+        if (date >= monthStart && date <= monthEnd) {
+          transactions.push({
+            id: doc.id,
+            date: data.date,
+            type: data.type, // 'revenue', 'cash', 'overflow', 'withdrawal'
+            amount: Number(data.amount || 0),
+            reason: data.reason || '',
+            createdAt: data.createdAt
+          });
+        }
+      });
+      
+      // Sort by date ascending for running balance calculation
+      return transactions.sort((a, b) => a.date.localeCompare(b.date));
+    } catch (error) {
+      console.error('Error fetching cashflow:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate running balance for transactions
+   */
+  function calculateRunningBalance(transactions) {
+    let balance = 0;
+    return transactions.map(t => {
+      if (t.type === 'withdrawal') {
+        balance -= t.amount;
+      } else {
+        balance += t.amount;
+      }
+      return {
+        ...t,
+        runningBalance: balance
+      };
+    });
+  }
+
+  /**
+   * Calculate monthly revenue from sales
+   * 
+   * @param {string} yearMonth - "YYYY-MM" format (e.g., "2026-01")
+   * @returns {number} Total revenue = sum of (quantity × latest price) for all sales in month
+   * 
+   * NOTE: Date filtering uses string comparison with "YYYY-MM-DD" format.
+   * This works correctly for ISO 8601 - all dates in system must maintain this format.
+   */
+  async function calculateMonthlyRevenue(yearMonth) {
+    const [year, month] = yearMonth.split('-');
+    const monthStart = `${year}-${month}-01`;
+    const monthEnd = `${year}-${month}-31`;
+    
+    try {
+      const snapshot = await db.collection('sales').get();
+      let totalRevenue = 0;
+      
+      // Get all books prices
+      const booksPricesSnapshot = await db.collection('product_prices_books').get();
+      const booksLatestPrices = {};
+      booksPricesSnapshot.forEach(doc => {
+        const data = doc.data();
+        const product = data.product;
+        const ts = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : 0;
+        if (!booksLatestPrices[product] || ts > booksLatestPrices[product].time) {
+          booksLatestPrices[product] = { price: data.price, time: ts };
+        }
+      });
+      
+      // Get all photos prices
+      const photosPricesSnapshot = await db.collection('product_prices_photos').get();
+      const photosLatestPrices = {};
+      photosPricesSnapshot.forEach(doc => {
+        const data = doc.data();
+        const product = data.product;
+        const ts = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : 0;
+        if (!photosLatestPrices[product] || ts > photosLatestPrices[product].time) {
+          photosLatestPrices[product] = { price: data.price, time: ts };
+        }
+      });
+      
+      // Calculate revenue for sales in this month
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const date = data.date;
+        
+        if (date >= monthStart && date <= monthEnd) {
+          const item = data.item;
+          const quantity = Number(data.quantity || 0);
+          const category = data.category;
+          
+          let price = null;
+          if (category === 'books') {
+            price = booksLatestPrices[item]?.price;
+          } else if (category === 'photos') {
+            price = photosLatestPrices[item]?.price;
+          }
+          
+          if (price !== null && quantity > 0) {
+            totalRevenue += Number(price) * quantity;
+          }
+        }
+      });
+      
+      return totalRevenue;
+    } catch (error) {
+      console.error('Error calculating revenue:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Check if revenue transaction already exists for this month
+   */
+  async function hasRevenueTransaction(yearMonth) {
+    try {
+      const snapshot = await db.collection('cashflow')
+        .where('type', '==', 'revenue')
+        .where('reason', '==', yearMonth)
+        .limit(1)
+        .get();
+      
+      return !snapshot.empty;
+    } catch (error) {
+      console.error('Error checking revenue transaction:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Add revenue transaction to cashflow
+   */
+  async function addRevenueTransaction(yearMonth, amount) {
+    try {
+      const [year, month] = yearMonth.split('-');
+      const monthStart = `${year}-${month}-01`;
+      
+      // Check if revenue already added for this month
+      const exists = await hasRevenueTransaction(yearMonth);
+      if (exists) {
+        showToast('Revenue already added for this month', 'info');
+        return;
+      }
+      
+      await db.collection('cashflow').add({
+        date: monthStart,
+        type: 'revenue',
+        amount: Number(amount),
+        reason: yearMonth, // Use month as identifier
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      showToast(`Revenue ₹${Math.round(amount)} added automatically`, 'success');
+    } catch (error) {
+      console.error('Error adding revenue transaction:', error);
+      showToast('Failed to add revenue', 'error');
+    }
+  }
+
+  /**
+   * Add cash or overflow transaction
+   */
+  async function addCashTransaction(date, amount, type, reason) {
+    try {
+      await db.collection('cashflow').add({
+        date: date,
+        type: type, // 'cash' or 'overflow'
+        amount: Number(amount),
+        reason: reason,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      showToast(`Cash added: ₹${Math.round(amount)}`, 'success');
+    } catch (error) {
+      console.error('Error adding cash transaction:', error);
+      showToast('Failed to add cash', 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Add withdrawal transaction
+   */
+  async function addWithdrawalTransaction(date, amount, reason) {
+    try {
+      await db.collection('cashflow').add({
+        date: date,
+        type: 'withdrawal',
+        amount: Number(amount),
+        reason: reason,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      showToast(`Withdrawal: ₹${Math.round(amount)}`, 'success');
+    } catch (error) {
+      console.error('Error adding withdrawal transaction:', error);
+      showToast('Failed to record withdrawal', 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Delete transaction
+   */
+  async function deleteTransaction(transactionId) {
+    try {
+      await db.collection('cashflow').doc(transactionId).delete();
+      showToast('Transaction deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      showToast('Failed to delete transaction', 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Load and display cashflow for selected month
+   */
+  async function loadCashflow() {
+    if (cashflowState.isLoading) return;
+    
+    cashflowState.isLoading = true;
+    refreshButton.classList.add('loading');
+    refreshButton.disabled = true;
+    
+    cashflowBody.innerHTML = `
+      <div class="sheet-loading">
+        <div class="spinner"></div>
+        <span>Loading cashflow...</span>
+      </div>
+    `;
+    
+    try {
+      const transactions = await fetchCashflowForMonth(selectedMonth);
+      const withBalances = calculateRunningBalance(transactions);
+      
+      // Get current balance (last transaction's running balance or 0)
+      const currentBalance = withBalances.length > 0 
+        ? withBalances[withBalances.length - 1].runningBalance 
+        : 0;
+      
+      balanceDisplay.textContent = `₹${Math.round(currentBalance).toLocaleString('en-IN')}`;
+      
+      renderCashflowRows(withBalances);
+    } catch (error) {
+      console.error('Failed to load cashflow', error);
+      cashflowBody.innerHTML = `
+        <div class="sheet-error">
+          <div class="sheet-error-title">Error</div>
+          <div class="sheet-error-message">Failed to load cashflow</div>
+        </div>
+      `;
+    } finally {
+      cashflowState.isLoading = false;
+      refreshButton.classList.remove('loading');
+      refreshButton.disabled = false;
+    }
+  }
+
+  /**
+   * Render cashflow transactions
+   */
+  function renderCashflowRows(transactions) {
+    const role = getUserRole();
+    
+    if (!transactions || transactions.length === 0) {
+      cashflowBody.innerHTML = '<div class="sheet-empty">No transactions for this month.</div>';
+      return;
+    }
+    
+    cashflowBody.innerHTML = '';
+    
+    transactions.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'cashflow-row';
+      row.setAttribute('data-type', t.type); // Add data-type for color coding
+      
+      const date = new Date(t.date);
+      const dateStr = date.toLocaleDateString('en-IN');
+      
+      const typeLabel = {
+        'revenue': '📈 Revenue',
+        'cash': '💵 Cash',
+        'overflow': '↗️ Overflow',
+        'withdrawal': '🏦 Withdrawal'
+      }[t.type] || t.type;
+      
+      const amountClass = t.type === 'withdrawal' ? 'cashflow-amount-neg' : 'cashflow-amount-pos';
+      const amount = t.type === 'withdrawal' ? -t.amount : t.amount;
+      
+      row.innerHTML = `
+        <div class="cashflow-cell cashflow-col-date">${dateStr}</div>
+        <div class="cashflow-cell cashflow-col-type">${typeLabel}</div>
+        <div class="cashflow-cell cashflow-col-amount ${amountClass}">₹${Math.round(Math.abs(amount)).toLocaleString('en-IN')}</div>
+        <div class="cashflow-cell cashflow-col-balance">₹${Math.round(t.runningBalance).toLocaleString('en-IN')}</div>
+        <div class="cashflow-cell cashflow-col-note" title="${t.reason}">${t.reason || '-'}</div>
+        ${role === 'admin' ? '<button class="cashflow-delete-btn" aria-label="Delete transaction">×</button>' : ''}
+      `;
+      
+      if (role === 'admin') {
+        const deleteBtn = row.querySelector('.cashflow-delete-btn');
+        deleteBtn.addEventListener('click', async () => {
+          const confirmed = window.confirm(`Delete ${typeLabel} of ₹${Math.round(Math.abs(amount))}?`);
+          if (!confirmed) return;
+          try {
+            await deleteTransaction(t.id);
+            await loadCashflow();
+          } catch (error) {
+            console.error('Delete failed', error);
+          }
+        });
+      }
+      
+      cashflowBody.appendChild(row);
+    });
+  }
+
+  /**
+   * Show Add Cash Modal
+   */
+  function showAddCashModal() {
+    const dateInput = document.getElementById('cashflow-add-date');
+    const amountInput = document.getElementById('cashflow-add-amount');
+    const typeSelect = document.getElementById('cashflow-add-type');
+    const reasonInput = document.getElementById('cashflow-add-reason');
+    const cancelBtn = document.getElementById('cashflow-add-cancel');
+    const confirmBtn = document.getElementById('cashflow-add-confirm');
+    
+    // Set default date
+    dateInput.value = getLocalDate();
+    amountInput.value = '';
+    typeSelect.value = 'cash';
+    reasonInput.value = '';
+    
+    addModal.classList.remove('hidden');
+    setTimeout(() => amountInput.focus(), 100);
+    
+    const handleCancel = () => {
+      addModal.classList.add('hidden');
+    };
+    
+    const handleConfirm = async () => {
+      const date = dateInput.value;
+      const amount = Number(amountInput.value);
+      const type = typeSelect.value;
+      const reason = reasonInput.value.trim();
+      
+      if (!date || isNaN(amount) || amount <= 0) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+      
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Adding...';
+      
+      try {
+        await addCashTransaction(date, amount, type, reason);
+        addModal.classList.add('hidden');
+        await loadCashflow();
+      } catch (error) {
+        console.error('Add cash error:', error);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Add';
+      }
+    };
+    
+    // Replace listeners
+    const newCancel = cancelBtn.cloneNode(true);
+    const newConfirm = confirmBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+    newCancel.addEventListener('click', handleCancel);
+    newConfirm.addEventListener('click', handleConfirm);
+    
+    // Close on backdrop click
+    addModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-backdrop')) {
+        handleCancel();
+      }
+    });
+  }
+
+  /**
+   * Show Withdraw Modal
+   */
+  function showWithdrawModal() {
+    const dateInput = document.getElementById('cashflow-withdraw-date');
+    const amountInput = document.getElementById('cashflow-withdraw-amount');
+    const reasonInput = document.getElementById('cashflow-withdraw-reason');
+    const cancelBtn = document.getElementById('cashflow-withdraw-cancel');
+    const confirmBtn = document.getElementById('cashflow-withdraw-confirm');
+    
+    // Set default date
+    dateInput.value = getLocalDate();
+    amountInput.value = '';
+    reasonInput.value = '';
+    
+    withdrawModal.classList.remove('hidden');
+    setTimeout(() => amountInput.focus(), 100);
+    
+    const handleCancel = () => {
+      withdrawModal.classList.add('hidden');
+    };
+    
+    const handleConfirm = async () => {
+      const date = dateInput.value;
+      const amount = Number(amountInput.value);
+      const reason = reasonInput.value.trim();
+      
+      if (!date || isNaN(amount) || amount <= 0) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+      
+      if (!reason) {
+        showToast('Reason is mandatory for withdrawals', 'error');
+        return;
+      }
+      
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Withdrawing...';
+      
+      try {
+        await addWithdrawalTransaction(date, amount, reason);
+        withdrawModal.classList.add('hidden');
+        await loadCashflow();
+      } catch (error) {
+        console.error('Withdraw error:', error);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Withdraw';
+      }
+    };
+    
+    // Replace listeners
+    const newCancel = cancelBtn.cloneNode(true);
+    const newConfirm = confirmBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+    newCancel.addEventListener('click', handleCancel);
+    newConfirm.addEventListener('click', handleConfirm);
+    
+    // Close on backdrop click
+    withdrawModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-backdrop')) {
+        handleCancel();
+      }
+    });
+  }
+
+  /**
+   * Handle Add Revenue button
+   */
+  async function handleAddRevenue() {
+    try {
+      const monthRevenue = await calculateMonthlyRevenue(selectedMonth);
+      
+      if (monthRevenue === 0) {
+        showToast('No sales revenue for this month', 'info');
+        return;
+      }
+      
+      await addRevenueTransaction(selectedMonth, monthRevenue);
+      await loadCashflow();
+    } catch (error) {
+      console.error('Error handling add revenue:', error);
+    }
+  }
+
+  // Event listeners
+  monthInput.addEventListener('change', (e) => {
+    selectedMonth = e.target.value;
+    loadCashflow();
+  });
+
+  refreshButton.addEventListener('click', () => loadCashflow());
+  
+  if (addBtn) {
+    addBtn.addEventListener('click', showAddCashModal);
+  }
+  
+  if (withdrawBtn) {
+    withdrawBtn.addEventListener('click', showWithdrawModal);
+  }
+  
+  if (addRevenueBtn) {
+    addRevenueBtn.addEventListener('click', handleAddRevenue);
+  }
+
+  cashflowState.loadCashflow = loadCashflow;
+  window.loadCashflow = loadCashflow;
+
+  // Load default data
+  loadCashflow();
+}
+
+// ============================================================================
 // Navigation
 // ============================================================================
 
@@ -1598,6 +2551,82 @@ function registerServiceWorker() {
 }
 
 // ============================================================================
+// Pill Slider Helper
+// ============================================================================
+
+/**
+ * Update the pill slider position based on active button
+ */
+function updatePillSlider(container) {
+  if (!container) return;
+  
+  const activeButton = container.querySelector('.category-pill-button.active');
+  const slider = container.querySelector('.category-pill-slider');
+  
+  if (!activeButton || !slider) return;
+  
+  // Get the active button's position within the container
+  const containerRect = container.getBoundingClientRect();
+  const buttonRect = activeButton.getBoundingClientRect();
+  
+  // Calculate the position relative to container
+  const relativeLeft = buttonRect.left - containerRect.left;
+  const buttonWidth = buttonRect.width;
+  
+  // Update slider position
+  slider.style.left = relativeLeft + 'px';
+  slider.style.width = buttonWidth + 'px';
+  
+  // Update slider color based on active button
+  const activeCategory = activeButton.dataset.category.toLowerCase();
+  if (activeCategory === 'books') {
+    slider.style.background = 'var(--gradient-purple)';
+    slider.style.boxShadow = '0 0 20px rgba(139, 92, 246, 0.4)';
+  } else if (activeCategory === 'photos') {
+    slider.style.background = 'var(--gradient-orange)';
+    slider.style.boxShadow = '0 0 20px rgba(249, 115, 22, 0.4)';
+  }
+}
+
+// ============================================================================
+// Touch & Mobile Optimization (Oxygen OS Animations)
+// ============================================================================
+
+/**
+ * Optimize touch interactions for mobile devices
+ */
+function initTouchOptimization() {
+  // Prevent default touch delay
+  document.addEventListener('touchstart', function() {}, { passive: true });
+  
+  // Add haptic feedback class for better visual feedback on touch
+  const interactiveElements = document.querySelectorAll(
+    'button, input, select, textarea, .nav-button, .action-button, .modal-button, .product-button'
+  );
+  
+  interactiveElements.forEach(element => {
+    element.addEventListener('touchstart', function() {
+      this.classList.add('touch-active');
+    }, { passive: true });
+    
+    element.addEventListener('touchend', function() {
+      this.classList.remove('touch-active');
+    }, { passive: true });
+  });
+  
+  // Disable hover on touch devices to prevent stuck hover states
+  let lastTouchTime = 0;
+  document.addEventListener('touchstart', function() {
+    lastTouchTime = Date.now();
+  }, { passive: true });
+  
+  // Add media query for reduced motion support
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.documentElement.style.setProperty('--animation-duration', '0.01ms');
+  }
+}
+
+// ============================================================================
 // App Initialization
 // ============================================================================
 
@@ -1605,6 +2634,8 @@ function registerServiceWorker() {
  * Initialize the application
  */
 function initApp() {
+  // Initialize touch optimization for better mobile experience
+  initTouchOptimization();
   // Register service worker for PWA
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
@@ -1627,6 +2658,9 @@ function initApp() {
   // Initialize monthly records page
   initMonthly();
 
+  // Initialize cashflow page
+  initCashflow();
+
   // Initialize price update page
   initPricePage();
   
@@ -1637,6 +2671,18 @@ function initApp() {
   const logoutButton = document.querySelector('.logout-button');
   if (logoutButton) {
     logoutButton.addEventListener('click', handleLogout);
+  }
+  
+  // Monitor performance (only in production/testing)
+  if (window.performance && performance.timing) {
+    window.addEventListener('load', () => {
+      const perfData = performance.timing;
+      const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
+      const connectTime = perfData.responseEnd - perfData.requestStart;
+      const renderTime = perfData.domComplete - perfData.domLoading;
+      
+      console.log(`⚡ Performance: Page Load: ${pageLoadTime}ms, Connect: ${connectTime}ms, Render: ${renderTime}ms`);
+    });
   }
   
   // Register service worker

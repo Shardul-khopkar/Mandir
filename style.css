@@ -31,6 +31,73 @@
   --gradient-main: linear-gradient(135deg, rgba(124, 58, 237, 0.9), rgba(249, 115, 22, 0.8));
   --blur-sm: blur(10px);
   --blur-md: blur(20px);
+  --animation-duration: 0.35s;
+}
+
+/* Performance Optimizations */
+/* Use GPU acceleration for animated elements */
+.section,
+.modal,
+.toast {
+  will-change: opacity, transform;
+}
+
+/* Optimize scroll performance */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+/* Optimize transitions */
+button,
+input,
+select,
+textarea,
+.nav-button,
+.category-pill-button,
+.action-button {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Touch Device Optimization */
+@media (hover: none) and (pointer: coarse) {
+  /* Disable hover effects on touch devices */
+  button:hover,
+  a:hover,
+  .nav-button:hover,
+  .action-button:hover {
+    transform: none;
+    box-shadow: initial;
+  }
+
+  /* Ensure buttons are easily tappable (minimum 44x44px) */
+  button, 
+  input[type="button"],
+  input[type="submit"],
+  .nav-button,
+  .action-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Touch active state */
+.touch-active {
+  transform: scale(0.95) !important;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {
@@ -398,49 +465,82 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.category-button {
+/* Pill-Shaped Segmented Control */
+.category-pill-container {
   position: relative;
-  padding: 1.5rem;
-  border-radius: 1.25rem;
-  border: 1.5px solid var(--border-glass);
-  background: rgba(31, 41, 79, 0.4);
+  display: inline-flex;
+  background: rgba(31, 41, 79, 0.6);
   backdrop-filter: var(--blur-sm);
-  color: var(--text-secondary);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 3px solid rgba(139, 92, 246, 0.4);
+  border-radius: 60px;
+  padding: 10px;
+  margin: 2rem auto;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  max-width: 550px;
+  height: 68px;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.category-pill-slider {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  height: calc(100% - 20px);
+  width: calc(50% - 10px);
+  background: var(--gradient-purple);
+  border-radius: 60px;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  z-index: 0;
+}
+
+.category-pill-button {
+  position: relative;
+  flex: 1;
+  padding: 1rem 2.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 1;
+  border-radius: 60px;
+  outline: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  min-height: 8rem;
-  cursor: pointer;
-  outline: none;
+  white-space: nowrap;
+  letter-spacing: 0.6px;
 }
 
-.category-button:hover {
-  background: rgba(31, 41, 79, 0.6);
-  border-color: rgba(139, 92, 246, 0.4);
-}
-
-.category-button.active {
-  border-color: rgba(139, 92, 246, 0.6);
+.category-pill-button.active {
   color: white;
-  background: rgba(31, 41, 79, 0.9);
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
 }
 
-.category-button[data-color="purple"].active {
-  background: var(--gradient-purple);
+.category-pill-button:hover:not(.active) {
+  color: var(--text-primary);
 }
 
-.category-button[data-color="orange"].active {
-  background: var(--gradient-orange);
+/* Mobile adjustments for pill */
+@media (max-width: 480px) {
+  .category-pill-container {
+    height: 62px;
+    max-width: 95%;
+    padding: 8px;
+    border: 2.5px solid rgba(139, 92, 246, 0.4);
+  }
+  
+  .category-pill-button {
+    padding: 0.875rem 2rem;
+    font-size: 1.05rem;
+  }
 }
-
-.category-label {
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+}
 }
 
 .category-indicator {
@@ -596,11 +696,17 @@ body {
 .nav-button.active {
   color: var(--purple-400);
   text-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.08));
+  border-radius: 0.75rem;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.25);
 }
 
 .nav-button[data-section="sheet"].active {
   color: var(--orange-400);
   text-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.08));
+  border-radius: 0.75rem;
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.25);
 }
 
 .nav-label {
@@ -853,7 +959,118 @@ body {
 .modal-button-confirm:active {
   transform: scale(0.95);
 }
-  transform: none;
+
+.modal-button-delete {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.8));
+  color: var(--text-primary);
+  font-weight: 700;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+}
+
+.modal-button-delete:hover {
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
+}
+
+.modal-button-delete:active {
+  transform: scale(0.95);
+}
+
+/* Locket Hook Selector */
+.modal-hook-options {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.modal-hook-btn {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.05);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+}
+
+.modal-hook-btn:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.modal-hook-btn.active {
+  background: var(--gradient-main);
+  border-color: var(--purple-500);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+.modal-hook-btn:active {
+  transform: scale(0.95);
+}
+
+/* Variance Button Group */
+.variance-button-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.variance-btn {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.05);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.variance-btn:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.variance-btn.active {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  border-color: var(--purple-500);
+}
+
+.variance-btn-less.active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--red-500);
+  color: var(--red-500);
+}
+
+.variance-btn-none.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--purple-500);
+}
+
+.variance-btn-more.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--green-500);
+  color: var(--green-500);
+}
+
+.variance-btn:active {
+  transform: scale(0.95);
+}
+
+/* Hide helper */
+.hidden {
+  display: none !important;
 }
 
 /* Sales Sheet */
@@ -897,6 +1114,37 @@ body {
 
 .refresh-button:active {
   transform: scale(0.95);
+}
+
+.view-toggle-button {
+  padding: 0.625rem 0.75rem;
+  background: rgba(31, 41, 79, 0.6);
+  backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--border-glass);
+  border-radius: 0.75rem;
+  color: var(--purple-400);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.view-toggle-button:hover {
+  background: rgba(31, 41, 79, 0.8);
+  border-color: var(--purple-500);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+.view-toggle-button:active {
+  transform: scale(0.95);
+}
+
+.toggle-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .refresh-button.loading svg {
@@ -992,6 +1240,35 @@ body {
   padding: 0.5rem 0.75rem;
 }
 
+/* Variance cell color coding */
+.variance-cell {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  display: inline-block;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.variance-cell.variance-positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.variance-cell.variance-negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.variance-cell.variance-neutral {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--text-tertiary);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
 .small {
   padding: 6px 8px;
   font-size: 0.8rem;
@@ -1065,7 +1342,7 @@ body {
 
 .summary-header-row {
   display: grid;
-  grid-template-columns: 7fr 3fr;
+  grid-template-columns: 5fr 2fr 3fr;
   gap: 0.5rem;
   background: rgba(31, 41, 79, 0.6);
   backdrop-filter: var(--blur-sm);
@@ -1089,7 +1366,7 @@ body {
 
 .summary-row {
   display: grid;
-  grid-template-columns: 7fr 3fr;
+  grid-template-columns: 5fr 2fr 3fr;
   gap: 0.5rem;
   padding: 0.75rem;
   border-radius: 0.75rem;
@@ -1112,8 +1389,28 @@ body {
   white-space: nowrap;
 }
 
+@media (max-width: 480px) {
+  .summary-cell-item {
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
 .summary-cell-qty {
   text-align: right;
+}
+
+.summary-col-revenue {
+  text-align: right;
+  color: var(--green-500);
+}
+
+.summary-cell-revenue {
+  text-align: right;
+  color: var(--purple-400);
+  font-weight: 600;
 }
 
 .summary-footer {
@@ -1123,6 +1420,35 @@ body {
   text-align: right;
   font-size: 0.75rem;
   color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.summary-total-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.summary-total-label {
+  font-weight: 600;
+  color: var(--purple-400);
+  font-size: 0.8125rem;
+}
+
+.summary-total-value {
+  font-weight: 700;
+  background: var(--gradient-main);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 0.9375rem;
 }
 
 /* Responsive adjustments */
@@ -1216,11 +1542,13 @@ body {
 .monthly-table th:first-child {
   position: sticky;
   left: 0;
-  background: rgba(31, 41, 79, 0.7);
+  background: rgba(31, 41, 79, 1);
   z-index: 11;
   text-align: left;
   padding: 0.5rem 0.5rem;
-  min-width: 10rem;
+  min-width: 140px;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .monthly-table th:last-child {
@@ -1244,16 +1572,20 @@ body {
 .monthly-table td:first-child {
   position: sticky;
   left: 0;
-  background: rgba(31, 41, 79, 0.4);
+  background: rgba(31, 41, 79, 1);
   z-index: 9;
   text-align: left;
   padding: 0.4rem 0.5rem;
   font-weight: 500;
-  min-width: 10rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 5rem;
+  min-width: 140px;
+  word-break: break-word;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  flex: 1;
+  vertical-align: top;
+  line-height: 1.4;
 }
 
 .monthly-table td:last-child {
@@ -1525,5 +1857,683 @@ body {
 
   .summary-value {
     font-size: 1.1rem;
+  }
+}
+
+/* ============================================================================
+   Cashflow Page Styles
+   ============================================================================ */
+
+.cashflow-balance-card {
+  background: var(--gradient-purple);
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  margin-bottom: 1.5rem;
+  animation: slideUpFade 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.balance-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.balance-label {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.balance-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Cashflow Actions */
+.cashflow-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+}
+
+.action-button-add {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: var(--green-500);
+}
+
+.action-button-add:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.6);
+  transform: translateY(-2px);
+}
+
+.action-button-remove {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: var(--red-500);
+}
+
+.action-button-remove:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: translateY(-2px);
+}
+
+/* Cashflow Container and Table */
+.cashflow-container {
+  background: var(--bg-card);
+  border-radius: 1rem;
+  border: 1px solid var(--border-glass);
+  overflow: hidden;
+}
+
+.cashflow-header-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 1fr 2fr auto;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(139, 92, 246, 0.1);
+  border-bottom: 1px solid var(--border-glass);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--purple-400);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.cashflow-body {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+
+.cashflow-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 1fr 2fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-glass);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  border-radius: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.cashflow-row[data-type="revenue"] {
+  background: rgba(16, 185, 129, 0.1);
+  border-left: 3px solid rgba(16, 185, 129, 0.5);
+}
+
+.cashflow-row[data-type="cash"],
+.cashflow-row[data-type="overflow"] {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
+}
+
+.cashflow-row[data-type="withdrawal"] {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid rgba(239, 68, 68, 0.5);
+}
+
+.cashflow-row:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-left: 3px solid rgba(139, 92, 246, 0.5);
+  transform: translateX(4px);
+}
+
+.cashflow-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashflow-col-date {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.cashflow-col-type {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.cashflow-col-amount {
+  font-weight: 700;
+  text-align: right;
+  font-size: 1.05rem;
+}
+
+.cashflow-amount-pos {
+  color: var(--green-500);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.cashflow-amount-neg {
+  color: var(--red-500);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.cashflow-col-balance {
+  font-weight: 600;
+  color: var(--purple-400);
+  text-align: right;
+}
+
+.cashflow-col-note {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+.cashflow-delete-btn {
+  background: none;
+  border: none;
+  color: var(--red-500);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.cashflow-delete-btn:hover {
+  color: var(--red-500);
+  transform: scale(1.2);
+}
+
+.cashflow-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal Styles for Cashflow */
+#cashflow-add-modal,
+#cashflow-withdraw-modal {
+  display: none;
+}
+
+#cashflow-add-modal.hidden,
+#cashflow-withdraw-modal.hidden {
+  display: none;
+}
+
+#cashflow-add-modal:not(.hidden),
+#cashflow-withdraw-modal:not(.hidden) {
+  display: flex;
+}
+
+/* Select dropdown styling */
+select.modal-quantity-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a8b5d4' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+/* Responsive adjustments for Cashflow */
+@media (max-width: 768px) {
+  .cashflow-header-row,
+  .cashflow-row {
+    grid-template-columns: 0.8fr 1fr 0.8fr 1fr auto;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  .cashflow-col-note {
+    display: none;
+  }
+
+  .cashflow-header-row > :nth-child(5),
+  .cashflow-row > :nth-child(5) {
+    display: none;
+  }
+
+  .cashflow-actions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .action-button {
+    font-size: 0.8rem;
+    padding: 0.5rem;
+  }
+
+  .action-button svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .balance-value {
+    font-size: 1.5rem;
+  }
+
+  .cashflow-header-row,
+  .cashflow-row {
+    grid-template-columns: 0.7fr 0.8fr 0.8fr auto;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .cashflow-col-balance {
+    display: none;
+  }
+
+  .cashflow-header-row > :nth-child(4),
+  .cashflow-row > :nth-child(4) {
+    display: none;
+  }
+
+  .cashflow-actions {
+    gap: 0.5rem;
+  }
+}
+
+/* ============================================================================
+   OXYGEN OS STYLE ANIMATIONS
+   ============================================================================ */
+
+/* Smooth entrance animations inspired by Samsung Oxygen OS */
+@keyframes oxygenSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes oxygenFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes oxygenFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes oxygenPageIn {
+  0% {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes oxygenPageOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+}
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes oxygenScaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes oxygenBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes oxygenGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+  }
+}
+
+@keyframes oxygenRipple {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes oxygenPulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(139, 92, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+}
+
+/* Apply Oxygen animations to interactive elements */
+.section {
+  animation: oxygenFadeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.card {
+  animation: oxygenSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Enhanced button transitions */
+button, 
+input[type="button"],
+input[type="submit"],
+.action-button,
+.modal-button,
+.auth-button,
+.nav-button,
+.refresh-button,
+.view-toggle-button {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.35s ease-out !important;
+}
+
+/* Smooth hover effects */
+button:hover:not(:disabled),
+input[type="button"]:hover,
+input[type="submit"]:hover,
+.action-button:hover,
+.modal-button-confirm:hover,
+.auth-button:hover,
+.nav-button:hover,
+.refresh-button:hover,
+.view-toggle-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.25) !important;
+}
+
+/* Active/press animation */
+button:active:not(:disabled),
+input[type="button"]:active,
+input[type="submit"]:active,
+.action-button:active,
+.modal-button:active,
+.auth-button:active,
+.nav-button:active {
+  transform: scale(0.97) !important;
+}
+
+/* Input fields smooth transition */
+input, 
+textarea, 
+select {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+input:focus, 
+textarea:focus, 
+select:focus {
+  transform: scale(1.01);
+}
+
+/* Modal entrance animation */
+.modal:not(.hidden) {
+  animation: oxygenFadeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-backdrop {
+  animation: oxygenFadeIn 0.35s ease-out;
+}
+
+.modal-content {
+  animation: oxygenScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smooth category transitions */
+.category-button {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.category-button.active {
+  animation: oxygenBounce 0.5s ease-out;
+}
+
+/* Enhanced navigation button animation */
+.nav-button.active {
+  animation: oxygenScaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Table row hover animation */
+.summary-row:hover,
+.cashflow-row:hover,
+.monthly-table tbody tr:hover {
+  transform: translateX(2px) !important;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Smooth color transitions */
+.nav-button[data-section="sheet"].active svg,
+.category-button.active svg {
+  animation: oxygenGlow 1.5s ease-in-out infinite;
+}
+
+/* Loading spinner with oxygen style */
+.spinner,
+.refresh-button.loading svg {
+  animation: spin 1s linear infinite !important;
+}
+
+/* Product button smooth interaction */
+.product-button {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.product-button:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+}
+
+.product-button:active {
+  transform: scale(0.96) !important;
+}
+
+/* Toast notification smooth animation */
+.toast:not(.hidden) {
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smooth section transitions */
+.main-content {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Header animation */
+.header {
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Date button animation */
+.date-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.date-btn:hover {
+  transform: scale(1.08) !important;
+}
+
+.date-btn:active {
+  transform: scale(0.92) !important;
+}
+
+/* Variance cell animation */
+.variance-cell {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Modal hook button animation */
+.modal-hook-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.modal-hook-btn.active {
+  animation: oxygenPulseGlow 1.2s ease-out;
+}
+
+/* Variance button animation */
+.variance-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.variance-btn.active {
+  animation: oxygenPulseGlow 1s ease-out;
+}
+
+/* Small action button */
+.small-action-button {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.small-action-button:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Row delete button animation */
+.row-delete-btn {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.row-delete-btn:hover {
+  transform: scale(1.1) !important;
+  animation: oxygenGlow 1s ease-in-out;
+}
+
+/* Install prompt animation */
+.install-prompt {
+  animation: slideUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.install-btn-install,
+.install-btn-dismiss {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.install-btn-install:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Smooth logout button animation */
+.logout-button {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.logout-button:hover {
+  transform: scale(1.1) rotate(15deg) !important;
+}
+
+/* Summary item animation */
+.summary-item {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  animation: oxygenSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.summary-item:hover {
+  transform: translateY(-4px) !important;
+  animation: oxygenGlow 1s ease-in-out;
+}
+
+/* Balance card animation */
+.balance-value {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Smooth scrolling for better feel */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Mobile-friendly animations - reduce motion for better performance */
+@media (max-width: 480px) {
+  button, input, select, textarea,
+  .action-button, .modal-button, .nav-button {
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s ease-out !important;
+  }
+
+  button:hover, .action-button:hover {
+    transform: translateY(-1px) !important;
+  }
+
+  button:active, .action-button:active {
+    transform: scale(0.98) !important;
+  }
+
+  .product-button:hover {
+    transform: scale(1.01) !important;
+  }
+
+  /* Reduce glow effects on mobile for better performance */
+  .nav-button[data-section="sheet"].active svg,
+  .category-button.active svg {
+    animation: oxygenGlow 2s ease-in-out infinite !important;
   }
 }

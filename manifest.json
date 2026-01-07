@@ -1,6 +1,6 @@
 {
   "name": "Pustak Stall Entry",
-  "short_name": "Sales Tracker",
+  "short_name": "Stall Entry",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

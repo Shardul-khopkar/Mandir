@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#111827" />
   <meta name="description" content="Books & Photos Sales Tracker" />
+  <meta name="color-scheme" content="dark" />
   <title>Pustak Stall Entry</title>
   
   <!-- Manifest for PWA -->
@@ -12,7 +13,11 @@
   <link rel="icon" type="image/jpeg" href="./icon.jpg" />
   <link rel="apple-touch-icon" href="./icon.jpg" />
   
-  <!-- Styles -->
+  <!-- Preconnect to external domains for faster loading -->
+  <link rel="preconnect" href="https://www.gstatic.com" />
+  <link rel="dns-prefetch" href="https://www.googleapis.com" />
+  
+  <!-- Styles - inline critical styles for faster first paint -->
   <link rel="stylesheet" href="style.css" />
   
   <!-- Firebase SDK -->
@@ -101,23 +106,22 @@
         </div>
 
         <!-- Category Selection -->
-        <div class="category-grid">
+        <div class="category-pill-container">
           <button
-            class="category-button"
+            class="category-pill-button"
             data-category="Books"
             data-color="purple"
           >
             <span class="category-label">Books</span>
-            <div class="category-indicator hidden"></div>
           </button>
           <button
-            class="category-button"
+            class="category-pill-button"
             data-category="Photos"
             data-color="orange"
           >
             <span class="category-label">Photos</span>
-            <div class="category-indicator hidden"></div>
           </button>
+          <div class="category-pill-slider"></div>
         </div>
 
         <!-- Product List -->
@@ -212,10 +216,30 @@
           </div>
         </div>
 
+        <!-- Category Selection for Records -->
+        <div class="category-pill-container">
+          <button
+            class="category-pill-button"
+            data-category="books"
+            data-color="purple"
+          >
+            <span class="category-label">Books</span>
+          </button>
+          <button
+            class="category-pill-button"
+            data-category="photos"
+            data-color="orange"
+          >
+            <span class="category-label">Photos</span>
+          </button>
+          <div class="category-pill-slider"></div>
+        </div>
+
         <div class="summary-container">
           <div class="summary-header-row">
             <div class="summary-col-item">Product</div>
-            <div class="summary-col-qty">Total</div>
+            <div class="summary-col-qty">Qty</div>
+            <div class="summary-col-revenue">Revenue</div>
           </div>
 
           <div id="summary-body" class="summary-body">
@@ -226,6 +250,10 @@
           </div>
 
           <div class="summary-footer">
+            <div class="summary-total-row">
+              <span class="summary-total-label">Daily Revenue:</span>
+              <span class="summary-total-value" id="summary-daily-total">₹0</span>
+            </div>
             <span id="summary-count">Products: 0</span>
           </div>
         </div>
@@ -243,6 +271,14 @@
             </svg>
             Monthly
           </h2>
+          <button id="monthly-view-toggle" class="view-toggle-button" aria-label="Toggle expanded view">
+            <span class="toggle-label">Expanded</span>
+            <svg class="toggle-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1"></circle>
+              <circle cx="19" cy="12" r="1"></circle>
+              <circle cx="5" cy="12" r="1"></circle>
+            </svg>
+          </button>
         </div>
 
         <!-- Monthly Revenue Summary Card -->
@@ -267,23 +303,22 @@
         </div>
 
         <!-- Category Selection -->
-        <div class="category-grid">
+        <div class="category-pill-container">
           <button
-            class="category-button monthly-category"
+            class="category-pill-button"
             data-category="books"
             data-color="purple"
           >
             <span class="category-label">Books</span>
-            <div class="category-indicator hidden"></div>
           </button>
           <button
-            class="category-button monthly-category"
+            class="category-pill-button"
             data-category="photos"
             data-color="orange"
           >
             <span class="category-label">Photos</span>
-            <div class="category-indicator hidden"></div>
           </button>
+          <div class="category-pill-slider"></div>
         </div>
 
         <!-- Month Selection -->
@@ -311,6 +346,97 @@
           </div>
         </div>
       </section>
+
+      <!-- Cashflow Tracking Section -->
+      <section id="cashflow-section" class="section hidden">
+        <div class="sheet-header">
+          <h2 class="sheet-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            Cashflow
+          </h2>
+          <button id="cashflow-refresh" class="refresh-button" aria-label="Refresh cashflow">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Month Selection -->
+        <div class="card">
+          <label class="card-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Select Month
+          </label>
+          <input
+            type="month"
+            id="cashflow-month-input"
+            class="date-input"
+          />
+        </div>
+
+        <!-- Running Balance Card -->
+        <div class="card cashflow-balance-card">
+          <div class="balance-content">
+            <span class="balance-label">Current Balance</span>
+            <span class="balance-value" id="cashflow-balance">₹0</span>
+          </div>
+        </div>
+
+        <!-- Add Transaction Button -->
+        <div class="cashflow-actions">
+          <button id="cashflow-add-revenue" class="action-button action-button-add">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 8 12 16"></polyline>
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            Add Revenue
+          </button>
+          <button id="cashflow-add-transaction" class="action-button action-button-add">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 8 12 16"></polyline>
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            Add Cash
+          </button>
+          <button id="cashflow-remove-transaction" class="action-button action-button-remove">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            Withdraw
+          </button>
+        </div>
+
+        <!-- Transactions List -->
+        <div class="cashflow-container">
+          <div class="cashflow-header-row">
+            <div class="cashflow-col-date">Date</div>
+            <div class="cashflow-col-type">Type</div>
+            <div class="cashflow-col-amount">Amount</div>
+            <div class="cashflow-col-balance">Balance</div>
+            <div class="cashflow-col-note">Note</div>
+          </div>
+
+          <div id="cashflow-body" class="cashflow-body">
+            <div class="sheet-loading">
+              <div class="spinner"></div>
+              <span>Loading cashflow...</span>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Bottom Navigation -->
@@ -321,10 +447,10 @@
         aria-label="Entry"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"></rect>
-          <rect x="14" y="3" width="7" height="7"></rect>
-          <rect x="14" y="14" width="7" height="7"></rect>
-          <rect x="3" y="14" width="7" height="7"></rect>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="12" y1="11" x2="12" y2="17"></line>
+          <line x1="9" y1="14" x2="15" y2="14"></line>
         </svg>
         <span class="nav-label">Entry</span>
       </button>
@@ -334,13 +460,7 @@
         aria-label="Records"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
-          <line x1="8" y1="14" x2="8" y2="18"></line>
-          <line x1="12" y1="14" x2="12" y2="18"></line>
-          <line x1="16" y1="14" x2="16" y2="18"></line>
+          <path d="M6 6h12M6 6c-0.5 2 0 4 1 5M6 6v12c0 1 1 2 2 2h8c1 0 2-1 2-2V6M18 6c0.5 2 0 4-1 5M9 11h6M9 16h6"></path>
         </svg>
         <span class="nav-label">Records</span>
       </button>
@@ -356,6 +476,17 @@
           <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
         <span class="nav-label">Monthly</span>
+      </button>
+      <button
+        class="nav-button"
+        data-section="cashflow"
+        aria-label="Cashflow"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M4 3.06h2.726c1.22 0 2.12.575 2.325 1.724H4v1.051h5.051C8.855 7.001 8 7.558 6.788 7.558H4v1.317L8.437 14h2.11L6.095 8.884h.855c2.316-.018 3.465-1.476 3.688-3.049H12V4.784h-1.345c-.08-.778-.357-1.335-.793-1.732H12V2H4z"/>
+        </svg>
+        </svg>
+        <span class="nav-label">Cashflow</span>
       </button>
     </nav>
   </div>
@@ -385,11 +516,32 @@
   <div id="variance-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content">
-      <h3 class="modal-title">Edit Variance</h3>
+      <h3 class="modal-title">Variance</h3>
       <p class="modal-text">Product: <span id="variance-modal-product" class="modal-highlight"></span></p>
       <div class="modal-quantity">
-        <label for="variance-modal-input" class="modal-label">Variance:</label>
+        <label for="variance-modal-input" class="modal-label">Value:</label>
         <input type="number" id="variance-modal-input" class="modal-quantity-input" step="0.01" />
+      </div>
+      <div class="modal-quantity">
+        <label class="modal-label">Category:</label>
+        <div class="variance-button-group">
+          <button id="variance-less-btn" class="variance-btn variance-btn-less">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            Less
+          </button>
+          <button id="variance-none-btn" class="variance-btn variance-btn-none active">
+            —
+          </button>
+          <button id="variance-more-btn" class="variance-btn variance-btn-more">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="12 8 12 16"></polyline>
+              <polyline points="8 12 16 12"></polyline>
+            </svg>
+            More
+          </button>
+        </div>
       </div>
       <div class="modal-actions">
         <button id="variance-modal-cancel" class="modal-button modal-button-cancel">Cancel</button>
@@ -415,6 +567,21 @@
     </div>
   </div>
 
+  <!-- Delete Record Modal -->
+  <div id="delete-record-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Remove Entry</h3>
+      <p class="modal-text">Product: <span id="delete-modal-product" class="modal-highlight"></span></p>
+      <p class="modal-text" style="font-size: 0.9rem; color: var(--text-secondary);">Current quantity: <span id="delete-modal-qty" class="modal-highlight">1</span></p>
+      <div class="modal-actions">
+        <button id="delete-modal-reduce" class="modal-button modal-button-confirm">Reduce by 1</button>
+        <button id="delete-modal-delete" class="modal-button modal-button-delete">Delete Entry</button>
+        <button id="delete-modal-cancel" class="modal-button modal-button-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirmation Modal -->
   <div id="confirm-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
@@ -428,6 +595,19 @@
         <label for="modal-quantity-input" class="modal-label">Quantity:</label>
         <input type="number" id="modal-quantity-input" class="modal-quantity-input" value="1" min="1" />
       </div>
+      <!-- Locket Hook Selector (hidden by default) -->
+      <div id="modal-locket-hook-container" class="modal-quantity hidden">
+        <label class="modal-label">Locket Type:</label>
+        <div class="modal-hook-options">
+          <button type="button" id="modal-hook-with" class="modal-hook-btn active">
+            Hook
+          </button>
+          <button type="button" id="modal-hook-without" class="modal-hook-btn">
+            No Hook
+          </button>
+        </div>
+        <input type="hidden" id="modal-hook-type" value="hook" />
+      </div>
       <div class="modal-actions">
         <button id="modal-cancel" class="modal-button modal-button-cancel">
           Cancel
@@ -435,6 +615,61 @@
         <button id="modal-confirm" class="modal-button modal-button-confirm">
           Confirm
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Cash Modal -->
+  <div id="cashflow-add-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Add Cash</h3>
+      <div class="modal-quantity">
+        <label for="cashflow-add-date" class="modal-label">Date:</label>
+        <input type="date" id="cashflow-add-date" class="modal-quantity-input" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cashflow-add-amount" class="modal-label">Amount (₹):</label>
+        <input type="number" id="cashflow-add-amount" class="modal-quantity-input" min="0" step="0.01" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cashflow-add-type" class="modal-label">Type:</label>
+        <select id="cashflow-add-type" class="modal-quantity-input">
+          <option value="cash">Regular Cash</option>
+          <option value="overflow">Overflow from Last Month</option>
+        </select>
+      </div>
+      <div class="modal-quantity">
+        <label for="cashflow-add-reason" class="modal-label">Reason/Note:</label>
+        <input type="text" id="cashflow-add-reason" class="modal-quantity-input" placeholder="e.g., Overflow from previous month" />
+      </div>
+      <div class="modal-actions">
+        <button id="cashflow-add-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="cashflow-add-confirm" class="modal-button modal-button-confirm">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Withdraw Cash Modal -->
+  <div id="cashflow-withdraw-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Withdraw Cash</h3>
+      <div class="modal-quantity">
+        <label for="cashflow-withdraw-date" class="modal-label">Date:</label>
+        <input type="date" id="cashflow-withdraw-date" class="modal-quantity-input" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cashflow-withdraw-amount" class="modal-label">Amount (₹):</label>
+        <input type="number" id="cashflow-withdraw-amount" class="modal-quantity-input" min="0" step="0.01" />
+      </div>
+      <div class="modal-quantity">
+        <label for="cashflow-withdraw-reason" class="modal-label">Reason (Required):</label>
+        <input type="text" id="cashflow-withdraw-reason" class="modal-quantity-input" placeholder="e.g., Expenses, Owner withdrawal" />
+      </div>
+      <div class="modal-actions">
+        <button id="cashflow-withdraw-cancel" class="modal-button modal-button-cancel">Cancel</button>
+        <button id="cashflow-withdraw-confirm" class="modal-button modal-button-confirm">Withdraw</button>
       </div>
     </div>
   </div>
