@@ -7,7 +7,10 @@ const API_CACHE = 'stall-entry-api-v1';
 
 const urlsToCache = [
   './',
-  './manifest.json'
+  './index.html',
+  './manifest.json',
+  './app.js',
+  './style.css'
 ];
 
 // Install event - cache static assets aggressively
