@@ -63,13 +63,30 @@ A modern PWA-based sales and inventory tracking application for managing product
 3. Click "Install" to add to home screen or start menu
 4. App works offline and is fully functional as installed app
 
-## Documentation
+## PWA Icons & Manifest
 
-- [QUICK_REFERENCE.md](QUICK_REFERENCE.md) - Quick feature guide
-- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Technical details
-- [VALIDATION_CHECKLIST.md](VALIDATION_CHECKLIST.md) - Feature checklist
-- [UI_REDESIGN_SUMMARY.md](UI_REDESIGN_SUMMARY.md) - Design system overview
-- [DETAILED_CHANGELOG.md](DETAILED_CHANGELOG.md) - Complete change history
+The app includes a fully compliant PWA manifest with:
+- **192x192 PNG icon** for primary app icon
+- **512x512 PNG icon** for app store packaging
+- **Screenshots** for narrow and wide form factors
+- Unique app ID for proper browser identification
+
+To regenerate icons, open `generate_icons.html` in a browser and download the PNG files to the `icons/` folder.
+
+## Project Structure
+
+```
+├── index.html              # Main application
+├── app.js                  # Application logic
+├── style.css               # Styling
+├── manifest.json           # PWA manifest
+├── sw.js                   # Service worker
+├── generate_icons.html     # Icon generator tool
+├── metadata.json           # App metadata
+├── icons/                  # App icons (PNG files)
+├── components/             # UI components
+└── services/               # Backend services
+```
 
 ## User Roles
 
