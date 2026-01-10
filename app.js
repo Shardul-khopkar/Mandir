@@ -425,6 +425,38 @@ function buildLatestPriceMap(priceDocuments) {
   return map;
 }
 
+// Price cache to reduce redundant Firestore queries
+const priceCache = {
+  books: { data: null, timestamp: 0 },
+  photos: { data: null, timestamp: 0 },
+  cacheDuration: 5 * 60 * 1000 // 5 minutes
+};
+
+/**
+ * Fetch price map with cache to reduce Firestore queries
+ */
+async function fetchPricesMapWithCache(category) {
+  const cacheKey = category.toLowerCase();
+  const now = Date.now();
+  
+  // Return cached data if still fresh
+  if (priceCache[cacheKey]?.data && (now - priceCache[cacheKey].timestamp) < priceCache.cacheDuration) {
+    return priceCache[cacheKey].data;
+  }
+  
+  // Fetch fresh data
+  const collectionName = cacheKey === 'books' ? 'product_prices_books' : 'product_prices_photos';
+  try {
+    const snapshot = await db.collection(collectionName).get();
+    const map = buildLatestPriceMap(snapshot.docs);
+    priceCache[cacheKey] = { data: map, timestamp: now };
+    return map;
+  } catch (err) {
+    console.error('Error fetching prices:', err);
+    return {};
+  }
+}
+
 // ============================================================================
 // Firebase Operations
 // ============================================================================
@@ -853,6 +885,9 @@ function initRecords() {
       const pricesMap = await fetchPricesMapForRecords(selectedCategory);
       
       renderRows(rows, pricesMap);
+      
+      // Calculate combined revenue for both categories to display at top
+      await updateDailyTotalRevenue();
     } catch (error) {
       console.error('Failed to load records', error);
       const errorMessage = error?.message || 'Failed to load records.';
@@ -872,18 +907,54 @@ function initRecords() {
   }
 
   /**
-   * Fetch latest price map for a category
+   * Calculate and update daily revenue from both categories
+   */
+  async function updateDailyTotalRevenue() {
+    try {
+      // Fetch records from both categories
+      const booksRecords = await fetchRecordsByDate(selectedDate, 'books');
+      const photosRecords = await fetchRecordsByDate(selectedDate, 'photos');
+      
+      // Fetch prices for both categories
+      const booksMap = await fetchPricesMapForRecords('books');
+      const photosMap = await fetchPricesMapForRecords('photos');
+      
+      // Calculate totals
+      let booksTotal = 0;
+      let photosTotal = 0;
+      
+      booksRecords.forEach(({ item, total }) => {
+        const priceInfo = booksMap && booksMap[item];
+        const price = priceInfo && priceInfo.price !== undefined ? Number(priceInfo.price) : null;
+        if (price !== null) booksTotal += price * total;
+      });
+      
+      photosRecords.forEach(({ item, total }) => {
+        const priceInfo = photosMap && photosMap[item];
+        const price = priceInfo && priceInfo.price !== undefined ? Number(priceInfo.price) : null;
+        if (price !== null) photosTotal += price * total;
+      });
+      
+      const combinedTotal = booksTotal + photosTotal;
+      const formattedBooksTotal = `₹${Math.round(booksTotal).toLocaleString('en-IN')}`;
+      const formattedPhotosTotal = `₹${Math.round(photosTotal).toLocaleString('en-IN')}`;
+      const formattedCombined = `₹${Math.round(combinedTotal).toLocaleString('en-IN')}`;
+      
+      // Update the top revenue display with both category totals
+      const topRevenueDisplay = document.getElementById('summary-daily-total-top');
+      if (topRevenueDisplay) {
+        topRevenueDisplay.innerHTML = `<span class="revenue-breakdown"><span class="revenue-item">Books: ${formattedBooksTotal}</span> | <span class="revenue-item">Photos: ${formattedPhotosTotal}</span> | <span class="revenue-total">Total: ${formattedCombined}</span></span>`;
+      }
+    } catch (error) {
+      console.error('Error updating daily revenue:', error);
+    }
+  }
+
+  /**
+   * Fetch latest price map for a category (uses cache)
    */
   async function fetchPricesMapForRecords(category) {
-    const collectionName = category === 'books' ? 'product_prices_books' : 'product_prices_photos';
-    try {
-      const snapshot = await db.collection(collectionName).get();
-      const map = buildLatestPriceMap(snapshot.docs);
-      return map;
-    } catch (err) {
-      console.error('Error fetching prices:', err);
-      return {};
-    }
+    return await fetchPricesMapWithCache(category);
   }
 
   function renderRows(rows, pricesMap) {
@@ -932,12 +1003,6 @@ function initRecords() {
     summaryCount.textContent = `Products: ${rows.length}`;
     const formattedTotal = `₹${Math.round(dailyTotal).toLocaleString('en-IN')}`;
     summaryDailyTotal.textContent = formattedTotal;
-    
-    // Update the top revenue display as well
-    const topRevenueDisplay = document.getElementById('summary-daily-total-top');
-    if (topRevenueDisplay) {
-      topRevenueDisplay.textContent = formattedTotal;
-    }
   }
 
   /**
@@ -1301,7 +1366,7 @@ function initMonthly() {
       // Expanded view: Product, Daily columns, Total Sales
       dates.forEach(date => {
         const day = new Date(date).getDate();
-        html += `<th class="monthly-cell monthly-cell-date">${day}</th>`;
+        html += `<th class="monthly-cell monthly-cell-date" data-date="${date}">${day}</th>`;
       });
       html += '<th class="monthly-cell monthly-cell-total">Total Sales</th>';
     } else {
@@ -1317,7 +1382,7 @@ function initMonthly() {
     // Rows
     products.forEach(product => {
       html += '<tr>';
-      html += `<td class="monthly-cell monthly-cell-product" title="${product}">${product}</td>`;
+      html += `<td class="monthly-cell monthly-cell-product" data-product="${product}" title="${product}">${product}</td>`;
 
       let productTotal = 0;
       
@@ -1325,7 +1390,7 @@ function initMonthly() {
         // Expanded view: show daily columns
         dates.forEach(date => {
           const qty = monthData[product] && monthData[product][date] ? monthData[product][date] : 0;
-          html += `<td class="monthly-cell monthly-cell-date-qty">${qty}</td>`;
+          html += `<td class="monthly-cell monthly-cell-date-qty" data-date="${date}">${qty}</td>`;
           productTotal += qty;
         });
         html += `<td class="monthly-cell monthly-cell-total"><strong>${productTotal}</strong></td>`;
@@ -1405,6 +1470,48 @@ function initMonthly() {
             showMonthlySummary(selectedCategory, selectedMonth, monthData, pricesMap);
           } else {
             showPrevStockModal(selectedCategory, product);
+          }
+        });
+      });
+    } else {
+      // Expanded view: add click handlers to date cells to highlight the column
+      tableContainer.querySelectorAll('.monthly-cell-date-qty').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          const selectedDate = e.target.getAttribute('data-date');
+          
+          // Remove selected class from all cells
+          tableContainer.querySelectorAll('[data-date]').forEach(c => {
+            c.classList.remove('selected-column');
+          });
+          
+          // Add selected class to all cells in the clicked column
+          tableContainer.querySelectorAll(`[data-date="${selectedDate}"]`).forEach(c => {
+            c.classList.add('selected-column');
+          });
+        });
+      });
+      
+      // Add click handlers to product title cells to highlight both row and column
+      tableContainer.querySelectorAll('.monthly-cell-product').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          const product = e.target.getAttribute('data-product');
+          
+          // Remove selected classes from all cells
+          tableContainer.querySelectorAll('.monthly-cell-product, [data-date]').forEach(c => {
+            c.classList.remove('selected-column', 'selected-row');
+          });
+          
+          // Highlight the entire product column (first column)
+          tableContainer.querySelectorAll('.monthly-cell-product').forEach(c => {
+            c.classList.add('selected-column');
+          });
+          
+          // Highlight the entire row for the clicked product
+          const row = e.target.closest('tr');
+          if (row) {
+            row.querySelectorAll('td').forEach(cell => {
+              cell.classList.add('selected-row');
+            });
           }
         });
       });
@@ -2618,93 +2725,97 @@ function initCashflow() {
     const notesInput = document.getElementById('cash-count-notes');
     const coinsInput = document.getElementById('cash-count-coins');
     const totalDisplay = document.getElementById('cash-count-total-value');
-    const cancelBtn = document.getElementById('cash-count-cancel');
-    const confirmBtn = document.getElementById('cash-count-confirm');
     
-    // Set default or edit date
+    if (!modal) {
+      console.error('Cash count modal not found');
+      return;
+    }
+    
+    // Reset form
     const dateToUse = editDate || getLocalDate();
     dateInput.value = dateToUse;
-    dateInput.disabled = editDate ? true : false; // Disable date editing when editing existing record
+    dateInput.disabled = editDate ? true : false;
     notesInput.value = '';
     coinsInput.value = '';
     totalDisplay.textContent = '0';
     
-    // Load existing data if available
-    db.collection('cash_counts').doc(dateToUse).get().then(doc => {
-      if (doc.exists) {
-        const data = doc.data();
-        notesInput.value = data.notes || '';
-        coinsInput.value = data.coins || '';
-        updateCashCountTotal();
-      }
-    });
+    // Load existing data if editing
+    if (editDate) {
+      db.collection('cash_counts').doc(editDate).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          notesInput.value = data.notes || '';
+          coinsInput.value = data.coins || '';
+          updateCashCountTotal();
+        }
+      }).catch(err => console.error('Error loading cash count:', err));
+    }
     
+    // Show modal
     modal.classList.remove('hidden');
     setTimeout(() => notesInput.focus(), 100);
+  }
+  
+  // Update cash count total
+  function updateCashCountTotal() {
+    const notesInput = document.getElementById('cash-count-notes');
+    const coinsInput = document.getElementById('cash-count-coins');
+    const totalDisplay = document.getElementById('cash-count-total-value');
     
-    // Update total as user types
-    const updateCashCountTotal = () => {
-      const notes = Number(notesInput.value) || 0;
-      const coins = Number(coinsInput.value) || 0;
-      totalDisplay.textContent = Math.round(notes + coins).toLocaleString('en-IN');
-    };
+    const notes = Number(notesInput.value) || 0;
+    const coins = Number(coinsInput.value) || 0;
+    totalDisplay.textContent = Math.round(notes + coins).toLocaleString('en-IN');
+  }
+  
+  // Save cash count
+  async function saveCashCountModal() {
+    const modal = document.getElementById('cashflow-cash-count-modal');
+    const dateInput = document.getElementById('cash-count-date');
+    const notesInput = document.getElementById('cash-count-notes');
+    const coinsInput = document.getElementById('cash-count-coins');
+    const confirmBtn = document.getElementById('cash-count-confirm');
     
-    notesInput.addEventListener('input', updateCashCountTotal);
-    coinsInput.addEventListener('input', updateCashCountTotal);
+    const date = dateInput.value;
+    const notes = notesInput.value;
+    const coins = coinsInput.value;
     
-    const handleCancel = () => {
+    if (!date || notes === '' || coins === '') {
+      showToast('Please fill in all fields', 'error');
+      return;
+    }
+    
+    const notesNum = Number(notes);
+    const coinsNum = Number(coins);
+    
+    if (isNaN(notesNum) || isNaN(coinsNum) || notesNum < 0 || coinsNum < 0) {
+      showToast('Please enter valid amounts', 'error');
+      return;
+    }
+    
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Saving...';
+    
+    try {
+      // Save cash count
+      await saveCashCount(date, notesNum, coinsNum);
+      showToast('Cash count saved', 'success');
+      
       modal.classList.add('hidden');
-      dateInput.disabled = false;
-    };
-    
-    const handleConfirm = async () => {
-      const date = dateInput.value;
-      const notes = notesInput.value;
-      const coins = coinsInput.value;
-      
-      if (!date || notes === '' || coins === '') {
-        showToast('Please fill in all fields', 'error');
-        return;
-      }
-      
-      const notesNum = Number(notes);
-      const coinsNum = Number(coins);
-      
-      if (isNaN(notesNum) || isNaN(coinsNum) || notesNum < 0 || coinsNum < 0) {
-        showToast('Please enter valid amounts', 'error');
-        return;
-      }
-      
-      confirmBtn.disabled = true;
-      confirmBtn.textContent = 'Saving...';
-      
-      try {
-        await saveCashCount(date, notesNum, coinsNum);
-        modal.classList.add('hidden');
-        dateInput.disabled = false;
-        await loadCashflow();
-      } catch (error) {
-        console.error('Cash count error:', error);
-      } finally {
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = 'Save';
-      }
-    };
-    
-    // Replace listeners
-    const newCancel = cancelBtn.cloneNode(true);
-    const newConfirm = confirmBtn.cloneNode(true);
-    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-    confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
-    newCancel.addEventListener('click', handleCancel);
-    newConfirm.addEventListener('click', handleConfirm);
-    
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal-backdrop')) {
-        handleCancel();
-      }
-    });
+    } catch (error) {
+      console.error('Error saving cash count:', error);
+      showToast('Failed to save cash count', 'error');
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Save';
+    }
+  }
+  
+  // Cancel cash count modal
+  function cancelCashCountModal() {
+    const modal = document.getElementById('cashflow-cash-count-modal');
+    const dateInput = document.getElementById('cash-count-date');
+    modal.classList.add('hidden');
+    dateInput.disabled = false;
   }
 
   // Event listeners
@@ -2730,7 +2841,35 @@ function initCashflow() {
   // Cash count button
   const cashCountBtn = document.getElementById('cashflow-cash-count');
   if (cashCountBtn) {
-    cashCountBtn.addEventListener('click', showCashCountModal);
+    cashCountBtn.addEventListener('click', () => showCashCountModal());
+  }
+  
+  // Cash count modal inputs
+  const notesInput = document.getElementById('cash-count-notes');
+  const coinsInput = document.getElementById('cash-count-coins');
+  if (notesInput) notesInput.addEventListener('input', updateCashCountTotal);
+  if (coinsInput) coinsInput.addEventListener('input', updateCashCountTotal);
+  
+  // Cash count modal buttons
+  const cashCountCancelBtn = document.getElementById('cash-count-cancel');
+  const cashCountConfirmBtn = document.getElementById('cash-count-confirm');
+  const cashCountModal = document.getElementById('cashflow-cash-count-modal');
+  
+  if (cashCountCancelBtn) {
+    cashCountCancelBtn.addEventListener('click', cancelCashCountModal);
+  }
+  
+  if (cashCountConfirmBtn) {
+    cashCountConfirmBtn.addEventListener('click', saveCashCountModal);
+  }
+  
+  // Close modal on backdrop click
+  if (cashCountModal) {
+    cashCountModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-backdrop')) {
+        cancelCashCountModal();
+      }
+    });
   }
 
   cashflowState.loadCashflow = loadCashflow;

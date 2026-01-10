@@ -1371,6 +1371,26 @@ body {
   background-clip: text;
 }
 
+.revenue-breakdown {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 14px;
+  justify-content: flex-end;
+}
+
+.revenue-item {
+  color: #666;
+  font-weight: 500;
+}
+
+.revenue-total {
+  color: #2c3e50;
+  font-weight: 700;
+  font-size: 15px;
+}
+
 .summary-container {
   background: var(--bg-glass);
   backdrop-filter: var(--blur-sm);
@@ -1645,6 +1665,27 @@ body {
 
 .monthly-table tbody tr:hover td:first-child {
   background: rgba(139, 92, 246, 0.15);
+}
+
+/* Selected/highlighted column in expanded view */
+.monthly-table thead th.selected-column,
+.monthly-table tbody td.selected-column {
+  background: rgba(139, 92, 246, 0.3) !important;
+  color: #1a1a1a !important;
+  font-weight: 600;
+}
+
+/* Selected/highlighted row in expanded view */
+.monthly-table tbody tr td.selected-row {
+  background: rgba(139, 92, 246, 0.2) !important;
+  color: #1a1a1a !important;
+}
+
+/* Selected/highlighted row - product column intersection gets darker */
+.monthly-table tbody tr td.selected-row.selected-column {
+  background: rgba(139, 92, 246, 0.4) !important;
+  color: #ffffff !important;
+  font-weight: 700;
 }
 
 /* Monthly category button styling */
@@ -2515,6 +2556,47 @@ select:focus {
 
 .category-button.active {
   animation: oxygenBounce 0.5s ease-out;
+}
+
+/* Prices category button styling - pill shaped */
+.prices-category {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: rgba(128, 128, 128, 0.1);
+  color: #666;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.prices-category[data-color="purple"] {
+  --color: #9b59b6;
+}
+
+.prices-category[data-color="orange"] {
+  --color: #f39c12;
+}
+
+.prices-category.active {
+  background: var(--color);
+  color: white;
+  border-color: var(--color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.prices-category:hover:not(.active) {
+  background: rgba(128, 128, 128, 0.2);
+  color: #333;
+}
+
+.prices-category:active {
+  transform: translateY(0);
 }
 
 /* Enhanced navigation button animation */
