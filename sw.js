@@ -1,16 +1,13 @@
 // Service Worker for Sales Tracker PWA
 // Smart caching with offline support and performance optimization
 
-const CACHE_NAME = 'stall-entry-v3.0';
+const CACHE_NAME = 'stall-entry-v5.0';
 const RUNTIME_CACHE = 'stall-entry-runtime-v1';
 const API_CACHE = 'stall-entry-api-v1';
 
 const urlsToCache = [
   './',
-  './index.html',
-  './manifest.json',
-  './app.js',
-  './style.css'
+  './manifest.json'
 ];
 
 // Install event - cache static assets aggressively
